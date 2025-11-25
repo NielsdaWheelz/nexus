@@ -51,9 +51,49 @@ const document: DocumentResponse = await api.getDocument({ id: 'doc_...' })
 ### 1.3 Version Guarantees
 
 - **API versioning**: Semantic versioning (`major.minor.patch`)
-- **Backwards compatibility**: MUST maintain backwards compatibility for at least 1 API version (see [§5 Backwards Compatibility](#5-backwards-compatibility))
+- **Backwards compatibility**: MUST maintain backwards compatibility for at least 1 API version (see [§7 Backwards Compatibility](#7-backwards-compatibility))
 - **Generated client version**: Client version MUST match backend API version
 - **Client updates**: Frontend MUST update TypeScript client whenever backend API version changes
+
+---
+
+## 1.4 Global API Conventions
+
+This section defines conventions that apply to ALL endpoints except where explicitly exempted.
+
+### 1.4.1 Authentication
+
+**All requests except `/health` MUST include**:
+
+```
+Authorization: Bearer <JWT_FROM_CLERK>
+```
+
+- JWT is issued by Clerk OIDC provider
+- Backend extracts `sub` claim as authenticated user ID
+- Missing or invalid JWT returns **401 Unauthenticated** (see §3 Error Codes)
+- Expired token returns **401 Unauthenticated**
+- Malformed header returns **401 Unauthenticated**
+
+**Health check exemption**:
+
+```
+GET /health
+```
+
+Returns 200 with `{ "status": "ok" }`, no authentication required.
+
+### 1.4.2 Base URL and Versioning
+
+All endpoints use versioned URL paths:
+
+```
+https://api.nexus.local/v1/...
+```
+
+- Version is part of the path, not a header
+- All examples below use `/v1/` prefix
+- API versions follow semantic versioning
 
 ---
 
@@ -67,30 +107,30 @@ All external API contracts use **typed string IDs** to prevent type mixing and i
 <prefix>_<uuid>
 
 Examples:
-  doc_550e8400-e29b-41d4-a716-446655440000
-  hl_550e8400-e29b-41d4-a716-446655440001
-  conv_550e8400-e29b-41d4-a716-446655440002
+  doc_11111111-2222-3333-4444-555555555555
+  hl_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+  conv_99999999-8888-7777-6666-555555555555
 ```
 
 ### 2.2 Prefix Registry
 
 | Object Type | Prefix | Example |
 |------------|--------|---------|
-| Document | `doc` | `doc_550e84...` |
-| Episode | `ep` | `ep_550e84...` |
-| Video | `vid` | `vid_550e84...` |
-| Podcast | `pod` | `pod_550e84...` |
-| Highlight | `hl` | `hl_550e84...` |
-| Annotation | `ann` | `ann_550e84...` |
-| Conversation | `conv` | `conv_550e84...` |
-| Message | `msg` | `msg_550e84...` |
-| Library | `lib` | `lib_550e84...` |
-| Link | `link` | `link_550e84...` |
-| User | `user` | `user_550e84...` |
+| Document | `doc` | `doc_11111111-2222-3333-4444-555555555555` |
+| Episode | `ep` | `ep_11111111-2222-3333-4444-555555555555` |
+| Video | `vid` | `vid_11111111-2222-3333-4444-555555555555` |
+| Podcast | `pod` | `pod_11111111-2222-3333-4444-555555555555` |
+| Highlight | `hl` | `hl_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee` |
+| Annotation | `ann` | `ann_99999999-8888-7777-6666-555555555555` |
+| Conversation | `conv` | `conv_99999999-8888-7777-6666-555555555555` |
+| Message | `msg` | `msg_99999999-8888-7777-6666-555555555555` |
+| Library | `lib` | `lib_99999999-8888-7777-6666-555555555555` |
+| Link | `lnk` | `lnk_99999999-8888-7777-6666-555555555555` |
+| User | `usr` | `usr_99999999-8888-7777-6666-555555555555` |
 
-### 2.3 ID Transformation
+### 2.3 ID Transformation Helpers
 
-**At API boundary**:
+**At API boundary, transform between external typed IDs and internal raw UUIDs**:
 
 ```python
 def to_api_id(object_type: str, db_uuid: UUID) -> str:
@@ -105,8 +145,8 @@ def to_api_id(object_type: str, db_uuid: UUID) -> str:
         'conversation': 'conv',
         'message': 'msg',
         'library': 'lib',
-        'link': 'link',
-        'user': 'user',
+        'link': 'lnk',
+        'user': 'usr',
     }
     prefix = prefix_map[object_type]
     return f"{prefix}_{db_uuid}"
@@ -128,8 +168,8 @@ def from_api_id(api_id: str) -> tuple[str, UUID]:
         'conv': 'conversation',
         'msg': 'message',
         'lib': 'library',
-        'link': 'link',
-        'user': 'user',
+        'lnk': 'link',
+        'usr': 'user',
     }
 
     if prefix not in prefix_reverse_map:
@@ -143,573 +183,1243 @@ def from_api_id(api_id: str) -> tuple[str, UUID]:
     return prefix_reverse_map[prefix], uuid_obj
 ```
 
-**Database**: Store raw UUIDs
+**Database**: Store raw UUIDs only.
 
-**Internal code**: Use raw UUIDs internally (faster, simpler)
+**Internal code**: Use raw UUIDs internally for efficiency.
 
-**External contracts**: Use typed IDs (API responses, client SDKs, logs)
+**API responses**: All IDs in request/response payloads MUST use typed format.
 
 ---
 
-## 3. Unified Error Envelope
+## 3. Unified Error Envelope & Canonical Error Codes
 
-All API endpoints MUST return errors in a uniform envelope format:
+All non-2xx API responses with a JSON body MUST use a uniform error envelope format.
 
 ### 3.1 Error Response Format
 
-```json
-{
-  "error": {
-    "code": "ERR_SOMETHING",
-    "message": "Human-readable error message",
-    "details": { ... },
-    "trace_id": "uuid"
-  }
-}
-```
-
-**Fields**:
-
-- `code`: Machine-readable error code (see §3.2)
-- `message`: Human-readable description
-- `details`: Optional object with error-specific context
-- `trace_id`: Unique UUID for tracing this error in logs
-
-### 3.2 Standard Error Codes
-
-**HTTP 400 Bad Request**:
-
-- `ERR_INVALID_REQUEST`: Request validation failed
-- `ERR_MISSING_FIELD`: Required field missing
-- `ERR_INVALID_FORMAT`: Field format invalid (e.g., invalid UUID)
-- `ERR_INVALID_PAGINATION`: Invalid pagination cursor or parameters
-
-**HTTP 401 Unauthorized**:
-
-- `ERR_UNAUTHORIZED`: Missing or invalid authentication token
-
-**HTTP 403 Forbidden**:
-
-- `ERR_FORBIDDEN`: Authenticated but lacks permission
-- `ERR_NOT_VISIBLE`: Object is not visible to user (ACL violation)
-
-**HTTP 404 Not Found**:
-
-- `ERR_NOT_FOUND`: Resource does not exist or is not visible
-
-**HTTP 409 Conflict**:
-
-- `ERR_CONFLICT`: Concurrency conflict (e.g., document being processed)
-- `ERR_ALREADY_EXISTS`: Resource already exists
-
-**HTTP 413 Payload Too Large**:
-
-- `ERR_UPLOAD_TOO_LARGE`: File exceeds size limit
-
-**HTTP 422 Unprocessable Entity**:
-
-- `ERR_PROCESSING_FAILED`: Backend processing failed
-- `ERR_PDF_EXTRACTION_FAILED`: PDF extraction failed
-- `ERR_EPUB_PARSE_FAILED`: EPUB parsing failed
-- `ERR_PDF_TOO_COMPLEX`: PDF too complex or corrupted
-- `ERR_EXTRACTION_FAILED`: Generic extraction failure
-
-**HTTP 429 Too Many Requests**:
-
-- `ERR_RATE_LIMITED`: User rate limit exceeded
-
-**HTTP 500 Internal Server Error**:
-
-- `ERR_INTERNAL_ERROR`: Unexpected server error
-
-### 3.3 HTTP Status → Error Code Mapping
-
-| HTTP Status | Common Error Codes |
-|-------------|-------------------|
-| 400 | `ERR_INVALID_REQUEST`, `ERR_MISSING_FIELD`, `ERR_INVALID_FORMAT`, `ERR_INVALID_PAGINATION` |
-| 401 | `ERR_UNAUTHORIZED` |
-| 403 | `ERR_FORBIDDEN`, `ERR_NOT_VISIBLE` |
-| 404 | `ERR_NOT_FOUND` |
-| 409 | `ERR_CONFLICT`, `ERR_ALREADY_EXISTS` |
-| 413 | `ERR_UPLOAD_TOO_LARGE` |
-| 422 | `ERR_PROCESSING_FAILED`, `ERR_PDF_EXTRACTION_FAILED`, `ERR_EPUB_PARSE_FAILED`, `ERR_PDF_TOO_COMPLEX`, `ERR_EXTRACTION_FAILED` |
-| 429 | `ERR_RATE_LIMITED` |
-| 500 | `ERR_INTERNAL_ERROR` |
-
-### 3.4 Example Error Responses
-
-**Missing field**:
+**All error responses MUST use this envelope**:
 
 ```json
 {
   "error": {
-    "code": "ERR_MISSING_FIELD",
-    "message": "Missing required field: title",
-    "details": { "field": "title" },
+    "code": "ERR_CODE",
+    "message": "Short human-readable description",
+    "details": null,
     "trace_id": "550e8400-e29b-41d4-a716-446655440000"
   }
 }
 ```
 
-**ACL violation**:
+**Field specifications**:
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `code` | string | YES | Canonical error code from registry (§3.2) |
+| `message` | string | YES | Human-readable, concise (≤140 chars) |
+| `details` | object \| null | NO | Error-specific context; may be null or omitted |
+| `trace_id` | string (UUID) | YES | Unique identifier for logs and support; generated server-side |
+
+### 3.2 Canonical Error Code Registry
+
+Error codes are grouped by category. Use the most specific code that applies.
+
+#### AUTHENTICATION / AUTHORIZATION
+
+| Code | HTTP | Description | Details Fields |
+|------|------|-------------|-----------------|
+| `ERR_UNAUTHENTICATED` | 401 | Missing, malformed, expired, or invalid JWT | `token_expired: bool` (optional) |
+| `ERR_AUTH_PROVIDER_MISCONFIGURED` | 500 | Clerk/OIDC keys unavailable or misconfigured | `provider: string` |
+| `ERR_FORBIDDEN` | 403 | Authenticated but not permitted (ownership, plan limit, ACL) | `reason: string` (optional) |
+| `ERR_NOT_VISIBLE` | 404 | Resource not visible under `Visible(U, O)`; may use 404 instead | `resource_type: string`, `resource_id: string` |
+
+#### VALIDATION
+
+| Code | HTTP | Description | Details Fields |
+|------|------|-------------|-----------------|
+| `ERR_VALIDATION_FAILED` | 400 | Payload constraints violated (e.g., type mismatch, missing required field) | `fields: { [field_name]: string[] }` (per-field error list) |
+| `ERR_UNSUPPORTED_MEDIA_TYPE` | 415 | Unsupported or missing content-type header | `content_type: string`, `allowed: string[]` |
+
+#### CONTENT & ANCHORING
+
+| Code | HTTP | Description | Details Fields |
+|------|------|-------------|-----------------|
+| `ERR_PDF_TOO_LARGE` | 400 | PDF exceeds page count or byte limit | `page_count: int`, `max_pages: int`, `bytes: int`, `max_bytes: int` |
+| `ERR_INGESTION_FAILED` | 422 | Generic ingestion failure (not covered by specific code) | `reason: string` (optional) |
+| `ERR_EXTRACTION_FAILED` | 422 | EPUB/HTML/PDF text extraction failed | `media_type: string`, `reason: string` (optional) |
+| `ERR_INVALID_ANCHOR` | 400 | Anchor payload structurally valid JSON but inconsistent with canonical text/PDF coordinates | `anchor_type: string`, `reason: string` |
+| `ERR_HIGHLIGHT_NOT_EDITABLE` | 400 | Attempting to modify immutable fields (e.g., offsets after creation) | `field: string` |
+
+#### RETRIEVAL & LLM
+
+| Code | HTTP | Description | Details Fields |
+|------|------|-------------|-----------------|
+| `ERR_LLM_PROVIDER_ERROR` | 502 | Upstream LLM provider (OpenAI, Anthropic, etc.) returned error or timeout | `provider: string`, `status_code: int`, `upstream_code: string` (optional) |
+| `ERR_LLM_QUOTA_EXCEEDED` | 429 | Per-user or global LLM token budget exhausted | `limit_tokens: int`, `used_tokens: int`, `resets_at: ISO8601` (optional) |
+| `ERR_RETRIEVAL_FAILED` | 500 | Vector search or retrieval pipeline failure | `space: string`, `provider: string`, `reason: string` (optional) |
+
+#### RESOURCE NOT FOUND
+
+| Code | HTTP | Description | Details Fields |
+|------|------|-------------|-----------------|
+| `ERR_RESOURCE_NOT_FOUND` | 404 | Resource does not exist or is not visible | `resource_type: string`, `resource_id: string` |
+| `ERR_JOB_NOT_FOUND` | 404 | Job ID or referenced job not found (if jobs exposed at all) | `job_id: string` |
+
+#### QUOTA & RATE LIMITING
+
+| Code | HTTP | Description | Details Fields |
+|------|------|-------------|-----------------|
+| `ERR_RATE_LIMITED` | 429 | API rate limit hit (per-user or global) | `limit_requests: int`, `window_seconds: int`, `retry_after_seconds: int` (optional) |
+| `ERR_QUOTA_EXCEEDED` | 429 | Generic quota exceeded (uploads, storage, documents, etc.); LLM has own code | `limit: int`, `used: int`, `quota_type: string` (optional) |
+
+#### INTERNAL / UNEXPECTED
+
+| Code | HTTP | Description | Details Fields |
+|------|------|-------------|-----------------|
+| `ERR_INTERNAL_SERVER_ERROR` | 500 | Unexpected server error; last resort when no specific code fits | `reason: string` (optional) |
+
+### 3.3 Error Response Examples
+
+**401 – Missing JWT**:
 
 ```json
 {
   "error": {
-    "code": "ERR_NOT_VISIBLE",
-    "message": "You do not have access to this object",
-    "details": { "object_id": "doc_550e8400-..." },
+    "code": "ERR_UNAUTHENTICATED",
+    "message": "Missing or invalid authentication token",
+    "details": null,
+    "trace_id": "550e8400-e29b-41d4-a716-446655440000"
+  }
+}
+```
+
+**400 – Validation error (multiple field errors)**:
+
+```json
+{
+  "error": {
+    "code": "ERR_VALIDATION_FAILED",
+    "message": "Request validation failed",
+    "details": {
+      "fields": {
+        "file": ["File is required"],
+        "source_kind": ["Must be one of: pdf, epub, html"]
+      }
+    },
     "trace_id": "550e8400-e29b-41d4-a716-446655440001"
   }
 }
 ```
 
-**Extraction failure**:
+**415 – Unsupported media type**:
 
 ```json
 {
   "error": {
-    "code": "ERR_PDF_EXTRACTION_FAILED",
-    "message": "Failed to extract text from PDF",
-    "details": { "reason": "pdf_corrupted", "bytes_read": 1234 },
+    "code": "ERR_UNSUPPORTED_MEDIA_TYPE",
+    "message": "Unsupported content-type for upload",
+    "details": {
+      "content_type": "application/zip",
+      "allowed": ["application/pdf", "application/epub+zip", "text/html"]
+    },
     "trace_id": "550e8400-e29b-41d4-a716-446655440002"
+  }
+}
+```
+
+**400 – PDF too large**:
+
+```json
+{
+  "error": {
+    "code": "ERR_PDF_TOO_LARGE",
+    "message": "PDF exceeds maximum page limit",
+    "details": {
+      "page_count": 5000,
+      "max_pages": 1000
+    },
+    "trace_id": "550e8400-e29b-41d4-a716-446655440003"
+  }
+}
+```
+
+**400 – Invalid anchor**:
+
+```json
+{
+  "error": {
+    "code": "ERR_INVALID_ANCHOR",
+    "message": "Anchor coordinates inconsistent with canonical text",
+    "details": {
+      "anchor_type": "text",
+      "reason": "text_start exceeds document length"
+    },
+    "trace_id": "550e8400-e29b-41d4-a716-446655440004"
+  }
+}
+```
+
+**403 – Forbidden (plan limit)**:
+
+```json
+{
+  "error": {
+    "code": "ERR_FORBIDDEN",
+    "message": "Document limit exceeded for current plan",
+    "details": {
+      "reason": "plan_limit_exceeded"
+    },
+    "trace_id": "550e8400-e29b-41d4-a716-446655440005"
+  }
+}
+```
+
+**404 – Resource not found**:
+
+```json
+{
+  "error": {
+    "code": "ERR_RESOURCE_NOT_FOUND",
+    "message": "Document not found",
+    "details": {
+      "resource_type": "document",
+      "resource_id": "doc_11111111-2222-3333-4444-555555555555"
+    },
+    "trace_id": "550e8400-e29b-41d4-a716-446655440006"
+  }
+}
+```
+
+**429 – LLM quota exceeded**:
+
+```json
+{
+  "error": {
+    "code": "ERR_LLM_QUOTA_EXCEEDED",
+    "message": "Token quota for this period exceeded",
+    "details": {
+      "limit_tokens": 100000,
+      "used_tokens": 100000,
+      "resets_at": "2025-11-26T00:00:00Z"
+    },
+    "trace_id": "550e8400-e29b-41d4-a716-446655440007"
+  }
+}
+```
+
+**502 – LLM provider error**:
+
+```json
+{
+  "error": {
+    "code": "ERR_LLM_PROVIDER_ERROR",
+    "message": "Upstream LLM provider error",
+    "details": {
+      "provider": "openai",
+      "status_code": 429,
+      "upstream_code": "rate_limit_exceeded"
+    },
+    "trace_id": "550e8400-e29b-41d4-a716-446655440008"
+  }
+}
+```
+
+**500 – Retrieval failure**:
+
+```json
+{
+  "error": {
+    "code": "ERR_RETRIEVAL_FAILED",
+    "message": "Vector search failed",
+    "details": {
+      "space": "content",
+      "provider": "pgvector",
+      "reason": "connection timeout"
+    },
+    "trace_id": "550e8400-e29b-41d4-a716-446655440009"
   }
 }
 ```
 
 ---
 
-## 4. Cursor-Based Pagination
+## 4. Success & List Response Shapes
 
-All list endpoints MUST support mandatory cursor-based pagination:
+### 4.1 Single-Resource Success Responses
 
-### 4.1 Pagination Envelope
+For successful single-resource endpoints (GET, POST, PUT, DELETE), return the resource directly:
 
 ```json
 {
-  "items": [...],
-  "next_cursor": "string|null",
-  "has_more": true
+  "id": "doc_11111111-2222-3333-4444-555555555555",
+  "title": "The Myth of Sisyphus",
+  "kind": "document",
+  "source_kind": "pdf",
+  "processing_state": "ready",
+  "created_at": "2025-01-01T12:00:00Z",
+  "updated_at": "2025-01-01T12:05:00Z"
 }
 ```
 
-**Fields**:
+**Constraints**:
 
-- `items`: Array of objects for this page
-- `next_cursor`: Opaque cursor string for next page, or `null` if at end
-- `has_more`: Boolean indicating whether more pages exist
+- Do NOT wrap in `{ "data": ... }` or any envelope
+- All IDs in the response MUST use typed format (§2)
+- Timestamps MUST be ISO8601 UTC (Z suffix)
+- HTTP status codes: 200 for successful GET/PUT/DELETE, 201 for successful POST
 
-### 4.2 Cursor Characteristics
+### 4.2 List Response Shape
 
-- **Opaque**: Cursor format is not specified to clients; it is backend-generated and may change
-- **Stable**: Cursor MUST remain valid for a short time window (≥ 5 minutes) to support pagination
-- **ACL-filtered**: Cursor MUST account for ACL filtering; pagination respects visibility rules
-- **Forward-only**: Pagination MUST support forward navigation only (no backward pagination)
-
-### 4.3 Query Parameters
-
-```
-GET /documents?cursor=abc123&limit=20
-```
-
-**Parameters**:
-
-- `cursor`: Optional opaque cursor from previous response. If absent, start at beginning
-- `limit`: Optional result count (default: 20, max: 100)
-
-**Response**:
+**All list endpoints MUST use cursor-based pagination with this shape**:
 
 ```json
 {
   "items": [
-    { "id": "doc_...", "title": "..." },
-    ...
+    { "id": "doc_11111111-2222-3333-4444-555555555555", "title": "...", "..." },
+    { "id": "doc_22222222-3333-4444-5555-666666666666", "title": "...", "..." }
   ],
-  "next_cursor": "xyz789",
+  "next_cursor": "base64-opaque-cursor-or-null",
   "has_more": true
 }
 ```
+
+**Field specifications**:
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `items` | array | YES | Array of typed resources (0 to `limit` items) |
+| `next_cursor` | string \| null | YES | Opaque base64 cursor for next page, or `null` if end reached |
+| `has_more` | boolean | YES | True if more pages exist, false otherwise |
+
+### 4.3 Query Parameters for List Endpoints
+
+All list endpoints support:
+
+```
+GET /v1/resources?cursor=abc&limit=20
+```
+
+| Parameter | Type | Default | Max | Notes |
+|-----------|------|---------|-----|-------|
+| `cursor` | string (optional) | null | – | Opaque cursor from previous `next_cursor`; omit or null to start from beginning |
+| `limit` | integer (optional) | 20 | 100 | Results per page |
 
 ### 4.4 Pagination Invariants
 
 - **INV-PAG-1**: If `next_cursor` is `null`, `has_more` MUST be `false`
-- **INV-PAG-2**: Pagination MUST respect `Visible(user, object)` for all items returned
-- **INV-PAG-3**: Item order MUST be deterministic within pagination window (stable sort)
-- **INV-PAG-4**: Cursor MUST encode necessary filter state (user_id, ACL, sort order) to ensure consistency
-- **INV-PAG-5**: Empty result sets return `next_cursor: null, has_more: false`
+- **INV-PAG-2**: All items returned MUST satisfy `Visible(user, object)` per spec/acl.md
+- **INV-PAG-3**: Item order MUST be deterministic and stable (sort by creation date, then ID)
+- **INV-PAG-4**: Cursor MUST encode enough state to maintain consistency across requests (user ID, filters, sort order)
+- **INV-PAG-5**: Empty result sets return `{ "items": [], "next_cursor": null, "has_more": false }`
+- **INV-PAG-6**: Cursor validity window is ≥ 5 minutes; older cursors MAY expire
 
-### 4.5 Example: Document List with Pagination
+### 4.5 Pagination Forward-Only
 
+Pagination is forward-only:
+
+- No backward/previous cursor
+- No offset-based pagination
+- No jumping to page N
+
+---
+
+## 5. Concrete Endpoint Examples
+
+This section provides full request/response examples for all core endpoints, demonstrating the conventions from §1–4.
+
+All examples assume:
+
+- Base URL: `https://api.nexus.local/v1`
+- Authentication: `Authorization: Bearer <JWT>`
+- Timestamps: ISO8601 UTC (Z suffix)
+- IDs: Typed format per §2
+
+### 5.1 Document Endpoints
+
+#### 5.1.1 Upload Document (PDF/EPUB/HTML)
+
+**POST /v1/documents/upload**
+
+Upload a new document file (PDF, EPUB, or HTML).
+
+**Request**:
+
+```http
+POST /v1/documents/upload HTTP/1.1
+Host: api.nexus.local
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Content-Type: multipart/form-data; boundary=----Boundary123
+
+------Boundary123
+Content-Disposition: form-data; name="file"; filename="the-myth-of-sisyphus.pdf"
+Content-Type: application/pdf
+
+[PDF binary content here]
+------Boundary123
+Content-Disposition: form-data; name="source_kind"
+
+pdf
+------Boundary123
+Content-Disposition: form-data; name="title"
+
+The Myth of Sisyphus
+------Boundary123
+Content-Disposition: form-data; name="source_url"
+
+https://example.com/books/sisyphus
+------Boundary123--
 ```
-GET /documents?cursor=null&limit=20
 
+**Success Response (201 Created)**:
+
+```json
+{
+  "id": "doc_11111111-2222-3333-4444-555555555555",
+  "title": "The Myth of Sisyphus",
+  "kind": "document",
+  "source_kind": "pdf",
+  "processing_state": "pending",
+  "created_at": "2025-01-01T12:00:00Z",
+  "updated_at": "2025-01-01T12:00:00Z"
+}
+```
+
+**Error Response – Validation (400 Bad Request)**:
+
+```json
+{
+  "error": {
+    "code": "ERR_VALIDATION_FAILED",
+    "message": "Request validation failed",
+    "details": {
+      "fields": {
+        "file": ["File is required"],
+        "source_kind": ["Must be one of: pdf, epub, html"]
+      }
+    },
+    "trace_id": "550e8400-e29b-41d4-a716-446655440000"
+  }
+}
+```
+
+**Error Response – Unsupported Media Type (415)**:
+
+```json
+{
+  "error": {
+    "code": "ERR_UNSUPPORTED_MEDIA_TYPE",
+    "message": "Unsupported content-type for upload",
+    "details": {
+      "content_type": "application/zip",
+      "allowed": ["application/pdf", "application/epub+zip", "text/html"]
+    },
+    "trace_id": "550e8400-e29b-41d4-a716-446655440001"
+  }
+}
+```
+
+**Error Response – PDF Too Large (400)**:
+
+```json
+{
+  "error": {
+    "code": "ERR_PDF_TOO_LARGE",
+    "message": "PDF exceeds maximum page limit",
+    "details": {
+      "page_count": 5000,
+      "max_pages": 1000
+    },
+    "trace_id": "550e8400-e29b-41d4-a716-446655440002"
+  }
+}
+```
+
+#### 5.1.2 List Documents
+
+**GET /v1/documents?cursor=&limit=20**
+
+Retrieve paginated list of user's documents.
+
+**Request**:
+
+```http
+GET /v1/documents?cursor=null&limit=20 HTTP/1.1
+Host: api.nexus.local
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+**Success Response (200 OK)**:
+
+```json
 {
   "items": [
-    { "id": "doc_001", "title": "Paper 1" },
-    { "id": "doc_002", "title": "Paper 2" },
-    ...
-    { "id": "doc_020", "title": "Paper 20" }
-  ],
-  "next_cursor": "encoded_state_for_page_2",
-  "has_more": true
-}
-
-# Next request
-GET /documents?cursor=encoded_state_for_page_2&limit=20
-```
-
----
-
-## 5. Request/Response Conventions
-
-### 5.1 Common Patterns
-
-**Authentication**:
-
-All requests include JWT token:
-
-```
-Authorization: Bearer <jwt_token>
-```
-
-Clerk JWKS verification on backend extracts `sub` claim as user ID.
-
-**Errors**:
-
-See [§3 Unified Error Envelope](#3-unified-error-envelope) for error response format.
-
-### 5.2 Document Endpoints
-
-#### POST /documents
-
-Create document:
-
-```
-Request:
-POST /documents
-Content-Type: application/json
-
-{
-  "title": "My PDF",
-  "blob_url": "s3://bucket/uploads/123.pdf"
-}
-
-Response:
-201 Created
-
-{
-  "id": "doc_550e8400-...",
-  "user_id": "user_550e8401-...",
-  "title": "My PDF",
-  "status": "pending",
-  "created_at": "2024-11-25T10:00:00Z"
-}
-```
-
-#### GET /documents/{id}
-
-Get document:
-
-```
-Request:
-GET /documents/doc_550e8400-...
-
-Response:
-200 OK
-
-{
-  "id": "doc_550e8400-...",
-  "title": "My PDF",
-  "status": "ready",
-  "canonical_text": "...",
-  "text_byte_length": 123456,
-  "embedding_status": "ready",
-  "created_at": "2024-11-25T10:00:00Z"
-}
-```
-
-If document not found or not visible: 404 Not Found
-
-#### GET /documents
-
-List documents:
-
-```
-Request:
-GET /documents?library_id=lib_550e8400-...
-
-Response:
-200 OK
-
-{
-  "results": [
     {
-      "id": "doc_550e8400-...",
-      "title": "...",
-      "status": "ready"
-    }
-  ]
-}
-```
-
-### 5.3 Highlight Endpoints
-
-#### POST /documents/{doc_id}/highlights
-
-Create highlight:
-
-```
-Request:
-POST /documents/doc_550e8400-.../highlights
-Content-Type: application/json
-
-{
-  "anchor_type": "text",
-  "text_start": 100,
-  "text_end": 150,
-  "quote": "the extracted text",
-  "prefix": "context before",
-  "suffix": "context after",
-  "color": "yellow"
-}
-
-Response:
-201 Created
-
-{
-  "id": "hl_550e8402-...",
-  "document_id": "doc_550e8400-...",
-  "text_start": 100,
-  "text_end": 150,
-  "color": "yellow",
-  "is_detached": false,
-  "created_at": "2024-11-25T10:00:00Z"
-}
-```
-
-#### GET /documents/{doc_id}/highlights
-
-List highlights:
-
-```
-Request:
-GET /documents/doc_550e8400-.../highlights
-
-Response:
-200 OK
-
-{
-  "results": [
-    {
-      "id": "hl_550e8402-...",
-      "text_start": 100,
-      "text_end": 150,
-      "color": "yellow",
-      "is_detached": false
-    }
-  ]
-}
-```
-
-### 5.4 Conversation & Message Endpoints
-
-#### POST /conversations
-
-Create conversation:
-
-```
-Request:
-POST /conversations
-Content-Type: application/json
-
-{
-  "title": "Research on ML"
-}
-
-Response:
-201 Created
-
-{
-  "id": "conv_550e8403-...",
-  "title": "Research on ML",
-  "created_at": "2024-11-25T10:00:00Z"
-}
-```
-
-#### POST /conversations/{conv_id}/messages
-
-Send message:
-
-```
-Request:
-POST /conversations/conv_550e8403-.../messages
-Content-Type: application/json
-
-{
-  "content": "What is the main theme?",
-  "model_id": "gpt-4-turbo"
-}
-
-Response:
-201 Created
-
-{
-  "id": "msg_550e8404-...",
-  "conversation_id": "conv_550e8403-...",
-  "role": "user",
-  "content": "What is the main theme?",
-  "created_at": "2024-11-25T10:00:00Z",
-  "effective_model_id": "gpt-4-turbo"
-}
-```
-
-(LLM response posted as separate message with role="assistant")
-
-#### GET /conversations/{conv_id}/messages
-
-List messages:
-
-```
-Request:
-GET /conversations/conv_550e8403-.../messages
-
-Response:
-200 OK
-
-{
-  "results": [
-    {
-      "id": "msg_550e8404-...",
-      "role": "user",
-      "content": "What is the main theme?",
-      "created_at": "2024-11-25T10:00:00Z"
+      "id": "doc_11111111-2222-3333-4444-555555555555",
+      "title": "The Myth of Sisyphus",
+      "kind": "document",
+      "source_kind": "pdf",
+      "processing_state": "ready",
+      "created_at": "2025-01-01T12:00:00Z",
+      "updated_at": "2025-01-01T12:05:00Z"
     },
     {
-      "id": "msg_550e8405-...",
-      "role": "assistant",
-      "content": "The main theme is...",
-      "created_at": "2024-11-25T10:00:01Z",
-      "is_stub": false
+      "id": "doc_22222222-3333-4444-5555-666666666666",
+      "title": "Crime and Punishment",
+      "kind": "document",
+      "source_kind": "epub",
+      "processing_state": "ready",
+      "created_at": "2025-01-02T10:30:00Z",
+      "updated_at": "2025-01-02T10:32:00Z"
     }
-  ]
+  ],
+  "next_cursor": "eyJpZCI6ICJkb2NfMzMzMzMzMzMtNDQ0NC01NTU1LTY2NjYtNzc3Nzc3Nzc3Nzc3In0=",
+  "has_more": true
 }
 ```
 
-Private messages appear as stubs (see [spec/acl.md](acl.md) §2.3)
+#### 5.1.3 Get Document
 
-### 5.5 Retrieval Endpoint
+**GET /v1/documents/{document_id}**
 
-#### POST /search
+Retrieve a single document by ID.
 
-Semantic search:
+**Request**:
 
+```http
+GET /v1/documents/doc_11111111-2222-3333-4444-555555555555 HTTP/1.1
+Host: api.nexus.local
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
-Request:
-POST /search
+
+**Success Response (200 OK)**:
+
+```json
+{
+  "id": "doc_11111111-2222-3333-4444-555555555555",
+  "title": "The Myth of Sisyphus",
+  "kind": "document",
+  "source_kind": "pdf",
+  "processing_state": "ready",
+  "text_byte_length": 245680,
+  "canonical_text_hash": "a1b2c3d4e5f6...",
+  "created_at": "2025-01-01T12:00:00Z",
+  "updated_at": "2025-01-01T12:05:00Z"
+}
+```
+
+**Error Response – Not Found (404)**:
+
+```json
+{
+  "error": {
+    "code": "ERR_RESOURCE_NOT_FOUND",
+    "message": "Document not found",
+    "details": {
+      "resource_type": "document",
+      "resource_id": "doc_11111111-2222-3333-4444-555555555555"
+    },
+    "trace_id": "550e8400-e29b-41d4-a716-446655440003"
+  }
+}
+```
+
+### 5.2 Highlight & Annotation Endpoints
+
+#### 5.2.1 Create Highlight
+
+**POST /v1/highlights**
+
+Create a new highlight with text or PDF anchor.
+
+**Request – Text Anchor**:
+
+```http
+POST /v1/highlights HTTP/1.1
+Host: api.nexus.local
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 Content-Type: application/json
 
 {
-  "query": "machine learning",
-  "spaces": ["content", "thought"],
-  "scope": { "type": "global" },
-  "k": 10
+  "document_id": "doc_11111111-2222-3333-4444-555555555555",
+  "anchor": {
+    "type": "text",
+    "text_start": 10240,
+    "text_end": 10310,
+    "anchored_content_hash": "d8f459c9c4c4b4f1a2b3c4d5e6f7g8h9"
+  },
+  "quote": "One must imagine Sisyphus happy.",
+  "prefix": "The struggle itself toward the heights is enough to fill a man's heart. ",
+  "suffix": "",
+  "color": "yellow"
 }
+```
 
-Response:
-200 OK
+**Request – PDF Anchor**:
+
+```json
+{
+  "document_id": "doc_11111111-2222-3333-4444-555555555555",
+  "anchor": {
+    "type": "pdf",
+    "page_index": 5,
+    "rects": [
+      { "x": 50, "y": 200, "width": 400, "height": 50 },
+      { "x": 50, "y": 250, "width": 400, "height": 50 }
+    ],
+    "pdf_file_hash": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+  },
+  "quote": "The struggle itself...",
+  "prefix": "",
+  "suffix": "",
+  "color": "yellow"
+}
+```
+
+**Success Response (201 Created)**:
+
+```json
+{
+  "id": "hl_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+  "document_id": "doc_11111111-2222-3333-4444-555555555555",
+  "anchor": {
+    "type": "text",
+    "text_start": 10240,
+    "text_end": 10310,
+    "anchored_content_hash": "d8f459c9c4c4b4f1a2b3c4d5e6f7g8h9"
+  },
+  "quote": "One must imagine Sisyphus happy.",
+  "color": "yellow",
+  "is_hidden": false,
+  "created_at": "2025-01-01T12:10:00Z",
+  "updated_at": "2025-01-01T12:10:00Z"
+}
+```
+
+**Error Response – Invalid Anchor (400)**:
+
+```json
+{
+  "error": {
+    "code": "ERR_INVALID_ANCHOR",
+    "message": "Anchor coordinates inconsistent with canonical text",
+    "details": {
+      "anchor_type": "text",
+      "reason": "text_start (10240) exceeds document length (8500)"
+    },
+    "trace_id": "550e8400-e29b-41d4-a716-446655440004"
+  }
+}
+```
+
+**Error Response – Forbidden (403)**:
+
+```json
+{
+  "error": {
+    "code": "ERR_FORBIDDEN",
+    "message": "You cannot annotate this document",
+    "details": {
+      "reason": "not_owner"
+    },
+    "trace_id": "550e8400-e29b-41d4-a716-446655440005"
+  }
+}
+```
+
+#### 5.2.2 List Highlights for Document
+
+**GET /v1/highlights?document_id={doc_id}&cursor=&limit=20**
+
+List highlights for a specific document with pagination.
+
+**Request**:
+
+```http
+GET /v1/highlights?document_id=doc_11111111-2222-3333-4444-555555555555&cursor=null&limit=20 HTTP/1.1
+Host: api.nexus.local
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+**Success Response (200 OK)**:
+
+```json
+{
+  "items": [
+    {
+      "id": "hl_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      "document_id": "doc_11111111-2222-3333-4444-555555555555",
+      "anchor": {
+        "type": "text",
+        "text_start": 10240,
+        "text_end": 10310,
+        "anchored_content_hash": "d8f459c9c4c4b4f1a2b3c4d5e6f7g8h9"
+      },
+      "quote": "One must imagine Sisyphus happy.",
+      "color": "yellow",
+      "is_hidden": false,
+      "created_at": "2025-01-01T12:10:00Z",
+      "updated_at": "2025-01-01T12:10:00Z"
+    },
+    {
+      "id": "hl_bbbbbbbb-cccc-dddd-eeee-ffffffffffff",
+      "document_id": "doc_11111111-2222-3333-4444-555555555555",
+      "anchor": {
+        "type": "text",
+        "text_start": 10500,
+        "text_end": 10620,
+        "anchored_content_hash": "d8f459c9c4c4b4f1a2b3c4d5e6f7g8h9"
+      },
+      "quote": "If this myth is tragic, it is because its hero is conscious.",
+      "color": "green",
+      "is_hidden": false,
+      "created_at": "2025-01-01T12:15:00Z",
+      "updated_at": "2025-01-01T12:15:00Z"
+    }
+  ],
+  "next_cursor": null,
+  "has_more": false
+}
+```
+
+#### 5.2.3 Create or Update Annotation
+
+**PUT /v1/highlights/{highlight_id}/annotation**
+
+Create or update the annotation (note) for a highlight.
+
+**Request**:
+
+```http
+PUT /v1/highlights/hl_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/annotation HTTP/1.1
+Host: api.nexus.local
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Content-Type: application/json
 
 {
-  "results": [
+  "content": "This is the core existential move: revolt without hope. A foundational moment for Camus's philosophy."
+}
+```
+
+**Success Response (200 OK)**:
+
+```json
+{
+  "id": "ann_99999999-8888-7777-6666-555555555555",
+  "highlight_id": "hl_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+  "content": "This is the core existential move: revolt without hope. A foundational moment for Camus's philosophy.",
+  "created_at": "2025-01-01T12:11:00Z",
+  "updated_at": "2025-01-01T12:11:00Z"
+}
+```
+
+**Error Response – Forbidden (403)**:
+
+```json
+{
+  "error": {
+    "code": "ERR_FORBIDDEN",
+    "message": "You cannot edit this annotation",
+    "details": {
+      "reason": "not_owner"
+    },
+    "trace_id": "550e8400-e29b-41d4-a716-446655440006"
+  }
+}
+```
+
+**Error Response – Not Found (404)**:
+
+```json
+{
+  "error": {
+    "code": "ERR_RESOURCE_NOT_FOUND",
+    "message": "Highlight not found",
+    "details": {
+      "resource_type": "highlight",
+      "resource_id": "hl_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    },
+    "trace_id": "550e8400-e29b-41d4-a716-446655440007"
+  }
+}
+```
+
+### 5.3 Conversation & Message Endpoints
+
+#### 5.3.1 Create Conversation
+
+**POST /v1/conversations**
+
+Create a new conversation with optional initial message.
+
+**Request**:
+
+```http
+POST /v1/conversations HTTP/1.1
+Host: api.nexus.local
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Content-Type: application/json
+
+{
+  "title": "Camus + existential revolt",
+  "initial_message": {
+    "content": "Help me understand what Camus actually means by revolt",
+    "model_id": "gpt-4.1"
+  }
+}
+```
+
+**Success Response (201 Created)**:
+
+```json
+{
+  "id": "conv_99999999-8888-7777-6666-555555555555",
+  "title": "Camus + existential revolt",
+  "created_at": "2025-01-01T12:20:00Z",
+  "updated_at": "2025-01-01T12:20:00Z",
+  "initial_message": {
+    "id": "msg_99999999-8888-7777-6666-111111111111",
+    "role": "user",
+    "content": "Help me understand what Camus actually means by revolt",
+    "created_at": "2025-01-01T12:20:00Z"
+  }
+}
+```
+
+**Error Response – Validation (400)**:
+
+```json
+{
+  "error": {
+    "code": "ERR_VALIDATION_FAILED",
+    "message": "Request validation failed",
+    "details": {
+      "fields": {
+        "title": ["Title must be between 1 and 200 characters"],
+        "initial_message.model_id": ["Model ID is required"]
+      }
+    },
+    "trace_id": "550e8400-e29b-41d4-a716-446655440008"
+  }
+}
+```
+
+#### 5.3.2 Append Message & Get Assistant Reply
+
+**POST /v1/conversations/{conversation_id}/messages**
+
+Send a user message and receive assistant response.
+
+**Request**:
+
+```http
+POST /v1/conversations/conv_99999999-8888-7777-6666-555555555555/messages HTTP/1.1
+Host: api.nexus.local
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Content-Type: application/json
+
+{
+  "content": "How does this compare to Sartre's bad faith?",
+  "model_id": "claude-3.5-sonnet",
+  "context_options": {
+    "scope": "document",
+    "document_id": "doc_11111111-2222-3333-4444-555555555555"
+  }
+}
+```
+
+**Success Response (201 Created)**:
+
+```json
+{
+  "user_message": {
+    "id": "msg_99999999-8888-7777-6666-222222222222",
+    "conversation_id": "conv_99999999-8888-7777-6666-555555555555",
+    "role": "user",
+    "content": "How does this compare to Sartre's bad faith?",
+    "created_at": "2025-01-01T12:21:00Z"
+  },
+  "assistant_message": {
+    "id": "msg_99999999-8888-7777-6666-333333333333",
+    "conversation_id": "conv_99999999-8888-7777-6666-555555555555",
+    "role": "assistant",
+    "content": "Camus's concept of revolt differs fundamentally from Sartre's bad faith. While Sartre focuses on self-deception within a world of radical freedom, Camus emphasizes...",
+    "model_id": "claude-3.5-sonnet",
+    "created_at": "2025-01-01T12:21:05Z"
+  }
+}
+```
+
+**Error Response – LLM Provider Error (502)**:
+
+```json
+{
+  "error": {
+    "code": "ERR_LLM_PROVIDER_ERROR",
+    "message": "Upstream LLM provider error",
+    "details": {
+      "provider": "openai",
+      "status_code": 429,
+      "upstream_code": "rate_limit_exceeded"
+    },
+    "trace_id": "550e8400-e29b-41d4-a716-446655440009"
+  }
+}
+```
+
+**Error Response – LLM Quota Exceeded (429)**:
+
+```json
+{
+  "error": {
+    "code": "ERR_LLM_QUOTA_EXCEEDED",
+    "message": "Token quota for this period exceeded",
+    "details": {
+      "limit_tokens": 100000,
+      "used_tokens": 100000,
+      "resets_at": "2025-11-26T00:00:00Z"
+    },
+    "trace_id": "550e8400-e29b-41d4-a716-446655440010"
+  }
+}
+```
+
+#### 5.3.3 List Messages in Conversation
+
+**GET /v1/conversations/{conversation_id}/messages?cursor=&limit=50**
+
+List all messages in a conversation with pagination.
+
+**Request**:
+
+```http
+GET /v1/conversations/conv_99999999-8888-7777-6666-555555555555/messages?cursor=null&limit=50 HTTP/1.1
+Host: api.nexus.local
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+**Success Response (200 OK)**:
+
+```json
+{
+  "items": [
     {
-      "id": "chunk_...",
-      "chunk_type": "content",
-      "source_type": "document",
-      "source_id": "doc_550e8400-...",
-      "text": "...",
-      "similarity": 0.87,
+      "id": "msg_99999999-8888-7777-6666-111111111111",
+      "conversation_id": "conv_99999999-8888-7777-6666-555555555555",
+      "role": "user",
+      "content": "Help me understand what Camus actually means by revolt",
+      "created_at": "2025-01-01T12:20:00Z"
+    },
+    {
+      "id": "msg_99999999-8888-7777-6666-444444444444",
+      "conversation_id": "conv_99999999-8888-7777-6666-555555555555",
+      "role": "assistant",
+      "content": "Camus uses 'revolt' to describe...",
+      "created_at": "2025-01-01T12:20:05Z"
+    },
+    {
+      "id": "msg_99999999-8888-7777-6666-222222222222",
+      "conversation_id": "conv_99999999-8888-7777-6666-555555555555",
+      "role": "user",
+      "content": "How does this compare to Sartre's bad faith?",
+      "created_at": "2025-01-01T12:21:00Z"
+    },
+    {
+      "id": "msg_99999999-8888-7777-6666-333333333333",
+      "conversation_id": "conv_99999999-8888-7777-6666-555555555555",
+      "role": "assistant",
+      "content": "Camus's concept of revolt differs fundamentally from Sartre's bad faith...",
+      "created_at": "2025-01-01T12:21:05Z"
+    }
+  ],
+  "next_cursor": null,
+  "has_more": false
+}
+```
+
+### 5.4 Search & Retrieval Endpoints
+
+#### 5.4.1 Semantic Search over Content
+
+**POST /v1/search/content**
+
+Perform semantic vector search over documents and content.
+
+**Request**:
+
+```http
+POST /v1/search/content HTTP/1.1
+Host: api.nexus.local
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Content-Type: application/json
+
+{
+  "query": "Camus revolt and absurdity",
+  "scope": {
+    "kind": "document",
+    "document_id": "doc_11111111-2222-3333-4444-555555555555"
+  },
+  "limit": 10,
+  "cursor": null
+}
+```
+
+**Success Response (200 OK)**:
+
+```json
+{
+  "items": [
+    {
+      "id": "chunk_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "media_type": "document",
+      "media_id": "doc_11111111-2222-3333-4444-555555555555",
+      "title": "The Myth of Sisyphus",
+      "chunk_text": "The absurd is the essential concept and the only truth. One must imagine Sisyphus happy. This is the revolt Camus describes...",
+      "text_start": 10240,
+      "text_end": 10450,
+      "similarity": 0.89,
       "metadata": {
-        "title": "My PDF",
-        "section_title": "Chapter 1"
+        "section": "Part II: The Absurd and the Escape"
+      }
+    },
+    {
+      "id": "chunk_yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy",
+      "media_type": "document",
+      "media_id": "doc_11111111-2222-3333-4444-555555555555",
+      "title": "The Myth of Sisyphus",
+      "chunk_text": "Revolt is the refusal to accept the limits of the human condition. Camus proposes that awareness of the absurd leads to...",
+      "text_start": 8900,
+      "text_end": 9120,
+      "similarity": 0.85,
+      "metadata": {
+        "section": "Part I: The Problem of the Absurd"
       }
     }
   ],
-  "search_tokens": 150
+  "next_cursor": null,
+  "has_more": false
 }
 ```
 
-### 5.6 Links Endpoint
+**Error Response – Retrieval Failed (500)**:
 
-#### POST /links
-
-Create link:
-
+```json
+{
+  "error": {
+    "code": "ERR_RETRIEVAL_FAILED",
+    "message": "Vector search failed",
+    "details": {
+      "space": "content",
+      "provider": "pgvector",
+      "reason": "connection timeout"
+    },
+    "trace_id": "550e8400-e29b-41d4-a716-446655440011"
+  }
+}
 ```
-Request:
-POST /links
+
+### 5.5 Library Endpoints
+
+#### 5.5.1 Create Library
+
+**POST /v1/libraries**
+
+Create a new library (collection of documents).
+
+**Request**:
+
+```http
+POST /v1/libraries HTTP/1.1
+Host: api.nexus.local
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 Content-Type: application/json
 
 {
-  "source_type": "document",
-  "source_id": "doc_550e8400-...",
-  "target_type": "highlight",
-  "target_id": "hl_550e8402-..."
-}
-
-Response:
-201 Created
-
-{
-  "id": "link_550e8406-...",
-  "source_type": "document",
-  "source_id": "doc_550e8400-...",
-  "target_type": "highlight",
-  "target_id": "hl_550e8402-...",
-  "created_at": "2024-11-25T10:00:00Z"
+  "name": "Existentialism",
+  "description": "Camus, Sartre, Kierkegaard, and related existential philosophy"
 }
 ```
 
-#### GET /documents/{doc_id}/links
+**Success Response (201 Created)**:
 
-Get related objects:
-
-```
-Request:
-GET /documents/doc_550e8400-.../links
-
-Response:
-200 OK
-
+```json
 {
-  "related": [
+  "id": "lib_99999999-8888-7777-6666-555555555555",
+  "name": "Existentialism",
+  "description": "Camus, Sartre, Kierkegaard, and related existential philosophy",
+  "created_at": "2025-01-01T12:30:00Z",
+  "updated_at": "2025-01-01T12:30:00Z"
+}
+```
+
+**Error Response – Forbidden (Plan Limit) (403)**:
+
+```json
+{
+  "error": {
+    "code": "ERR_FORBIDDEN",
+    "message": "Library limit exceeded for current plan",
+    "details": {
+      "reason": "plan_limit_exceeded",
+      "limit": 3,
+      "current": 3
+    },
+    "trace_id": "550e8400-e29b-41d4-a716-446655440012"
+  }
+}
+```
+
+#### 5.5.2 List Libraries
+
+**GET /v1/libraries?cursor=&limit=20**
+
+List user's libraries with pagination.
+
+**Request**:
+
+```http
+GET /v1/libraries?cursor=null&limit=20 HTTP/1.1
+Host: api.nexus.local
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+**Success Response (200 OK)**:
+
+```json
+{
+  "items": [
     {
-      "link_id": "link_550e8406-...",
-      "target_type": "highlight",
-      "target": {
-        "id": "hl_550e8402-...",
-        "text": "the related text"
-      }
+      "id": "lib_99999999-8888-7777-6666-555555555555",
+      "name": "Existentialism",
+      "description": "Camus, Sartre, Kierkegaard, and related existential philosophy",
+      "created_at": "2025-01-01T12:30:00Z",
+      "updated_at": "2025-01-01T12:30:00Z"
+    },
+    {
+      "id": "lib_88888888-7777-6666-5555-444444444444",
+      "name": "Phenomenology",
+      "description": "Husserl, Heidegger, Merleau-Ponty",
+      "created_at": "2025-01-01T12:35:00Z",
+      "updated_at": "2025-01-01T12:35:00Z"
     }
-  ]
+  ],
+  "next_cursor": null,
+  "has_more": false
 }
 ```
 
 ---
 
-## 6. Rate Limiting (Phase 2+)
+## 6. Health Check
 
-Per-user limits (to be designed in Phase 2):
+**GET /health**
 
-- API requests: 100 req/sec
-- Embedding API: Batched
-- Search requests: 10 req/sec
+Public endpoint, no authentication required. Returns API status.
+
+**Request**:
+
+```http
+GET /health HTTP/1.1
+Host: api.nexus.local
+```
+
+**Success Response (200 OK)**:
+
+```json
+{
+  "status": "ok"
+}
+```
 
 ---
 
-## 7. Backwards Compatibility
+## 7. Rate Limiting
 
-MUST maintain backwards compatibility for at least 1 API version:
+Rate limiting is enforced per-user based on plan tier (Phase 2+ detail):
 
-- New fields: additive only (old clients ignore)
-- Changed fields: Never remove, deprecate then remove in v2
-- Endpoint removal: Deprecate with warning header, remove in v2
+| Limit Type | Tier | Rate | Window |
+|-----------|------|------|--------|
+| API requests | Free | 100 req/sec | 1 sec |
+| API requests | Pro | 500 req/sec | 1 sec |
+| LLM requests | Free | 10 req/min | 1 min |
+| LLM requests | Pro | 60 req/min | 1 min |
+| Search requests | Free | 5 req/sec | 1 sec |
+| Search requests | Pro | 20 req/sec | 1 sec |
+
+**429 Response Headers**:
+
+When rate limit is hit, the response includes:
+
+```
+HTTP/1.1 429 Too Many Requests
+Retry-After: 5
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 1735401150
+```
+
+**Error Body**:
+
+```json
+{
+  "error": {
+    "code": "ERR_RATE_LIMITED",
+    "message": "Rate limit exceeded",
+    "details": {
+      "limit_requests": 100,
+      "window_seconds": 1,
+      "retry_after_seconds": 5
+    },
+    "trace_id": "550e8400-e29b-41d4-a716-446655440013"
+  }
+}
+```
+
+---
+
+## 8. Backwards Compatibility
+
+The API MUST maintain backwards compatibility for at least one full version:
+
+### 8.1 Adding New Fields
+
+- New fields in responses are always **additive and optional**
+- Old clients MUST ignore unknown fields
+- Clients MUST handle missing optional fields gracefully
+
+### 8.2 Modifying Existing Fields
+
+- Never remove or rename fields
+- Never change a field's type
+- If a field must change semantics, deprecate with a new field and sunset the old one in v2
+
+### 8.3 Adding New Endpoints
+
+- New endpoints are non-breaking and can be added anytime
+
+### 8.4 Removing Endpoints
+
+- Deprecated endpoints MUST send `Deprecation: true` header
+- Deprecation window: ≥ 6 months before removal
+- Use `Sunset: <date>` header to signal end-of-life
+
+### 8.5 Error Code Changes
+
+- Never reuse or remove error codes
+- New codes can be added; existing codes are stable
+- Client error handling MUST treat unknown codes as `ERR_INTERNAL_SERVER_ERROR`
+
+---
+
+## 9. Summary: API Contract Checklist
+
+When implementing any endpoint, ensure:
+
+- ✓ All requests (except `/health`) include `Authorization: Bearer <JWT>`
+- ✓ All IDs in responses use typed format (§2)
+- ✓ Success responses are unwrapped (no envelope)
+- ✓ All errors use canonical error envelope (§3)
+- ✓ All list endpoints use pagination shape (§4)
+- ✓ All timestamps are ISO8601 UTC
+- ✓ All examples match the provided templates (§5)
+- ✓ Rate limits are enforced per-user
+- ✓ 404 vs 403 is clear: use 404 for both not-found and not-visible (§3.3)
 
