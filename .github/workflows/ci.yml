@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'pr*']
+  pull_request:
+    branches: [main, 'pr*']
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.11']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v2
+        with:
+          version: latest
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Run backend checks (lint + test)
+        run: make lint && make test
+        working-directory: ./backend
+
+  frontend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Run frontend checks (lint + test)
+        run: make lint && make test
+        working-directory: ./frontend
