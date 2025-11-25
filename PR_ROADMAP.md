@@ -143,7 +143,7 @@ None.
 - `make format-check` verifies code without auto-formatting
 - Pre-commit hooks block commits with formatting/linting violations
 - `.env.example` contains all placeholders (not actual secrets)
-- Frontend `npm test` runs and passes
+- Frontend `bun test` runs and passes
 
 **Out of Scope:**
 - Database schema or migrations
