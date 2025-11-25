@@ -3,8 +3,8 @@
 help:
 	@echo "Frontend Makefile"
 	@echo ""
-	@echo "  make install      Install dependencies with bun"
-	@echo "  make dev          Start development server (Vite)"
+	@echo "  make install      Install dependencies with pnpm"
+	@echo "  make dev          Start development server (Next.js)"
 	@echo "  make build        Build for production"
 	@echo "  make test         Run tests (vitest)"
 	@echo "  make lint         Run linter (eslint)"
@@ -12,43 +12,43 @@ help:
 	@echo "  make format-check Check formatting (prettier)"
 	@echo "  make clean        Remove node_modules and dist"
 
-BUN := bun
+PNPM := pnpm
 
 install:
-	@echo "Installing dependencies with bun..."
-	$(BUN) install
+	@echo "Installing dependencies with pnpm..."
+	$(PNPM) install
 	@echo "✓ Dependencies installed"
 
 dev: install
 	@echo "Starting development server..."
-	$(BUN) run dev
+	$(PNPM) run dev
 
 build: install
 	@echo "Building for production..."
-	$(BUN) run build
+	$(PNPM) run build
 	@echo "✓ Build complete"
 
 test: install
 	@echo "Running tests..."
-	$(BUN) test
+	$(PNPM) run test -- --run
 	@echo "✓ Tests passed"
 
 lint: install
 	@echo "Running ESLint..."
-	$(BUN) run lint
+	$(PNPM) run lint
 	@echo "✓ Linting passed"
 
 format: install
 	@echo "Formatting code with Prettier..."
-	$(BUN) run format
+	$(PNPM) run format
 	@echo "✓ Formatting complete"
 
 format-check: install
 	@echo "Checking formatting with Prettier..."
-	$(BUN) run format-check
+	$(PNPM) run format:check
 	@echo "✓ Formatting check passed"
 
 clean:
 	@echo "Cleaning up..."
-	rm -rf node_modules dist build .cache bun.lock
+	rm -rf node_modules .next .pnpm-store pnpm-lock.yaml
 	@echo "✓ Cleaned"
