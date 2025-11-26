@@ -360,7 +360,7 @@ class TestListDocumentHighlights:
         db_session.add(hl2)
         db_session.flush()
 
-        response = client_authenticated.get(f"/highlights/documents/{doc_typed_id}")
+        response = client_authenticated.get(f"/documents/{doc_typed_id}/highlights")
 
         assert response.status_code == 200
         data = response.json()
@@ -383,7 +383,7 @@ class TestListDocumentHighlights:
         """Test listing highlights on document with no highlights."""
         doc_typed_id = to_api_id("document", test_document.id)
 
-        response = client_authenticated.get(f"/highlights/documents/{doc_typed_id}")
+        response = client_authenticated.get(f"/documents/{doc_typed_id}/highlights")
 
         assert response.status_code == 200
         data = response.json()
@@ -420,7 +420,7 @@ class TestListDocumentHighlights:
 
         # Get first page (limit=2)
         response1 = client_authenticated.get(
-            f"/highlights/documents/{doc_typed_id}",
+            f"/documents/{doc_typed_id}/highlights",
             params={"limit": 2},
         )
         assert response1.status_code == 200
@@ -431,7 +431,7 @@ class TestListDocumentHighlights:
 
         # Get second page
         response2 = client_authenticated.get(
-            f"/highlights/documents/{doc_typed_id}",
+            f"/documents/{doc_typed_id}/highlights",
             params={"limit": 2, "cursor": data1["next_cursor"]},
         )
         assert response2.status_code == 200
@@ -446,7 +446,7 @@ class TestListDocumentHighlights:
 
     def test_invalid_document_id_format(self, client_authenticated: TestClient):
         """Test that invalid document ID format returns 422."""
-        response = client_authenticated.get("/highlights/documents/invalid_id")
+        response = client_authenticated.get("/documents/invalid_id/highlights")
         assert response.status_code == 422
         data = response.json()
         assert data["error"]["code"] == "VALIDATION_ERROR"
@@ -454,7 +454,7 @@ class TestListDocumentHighlights:
     def test_document_not_found(self, client_authenticated: TestClient):
         """Test that non-existent document returns 404."""
         fake_doc_id = to_api_id("document", uuid4())
-        response = client_authenticated.get(f"/highlights/documents/{fake_doc_id}")
+        response = client_authenticated.get(f"/documents/{fake_doc_id}/highlights")
         assert response.status_code == 404
         data = response.json()
         assert data["error"]["code"] == "NOT_FOUND"
@@ -466,7 +466,7 @@ class TestListDocumentHighlights:
     ):
         """Test that listing highlights on another user's document returns 404."""
         doc_typed_id = to_api_id("document", other_user_document.id)
-        response = client_authenticated.get(f"/highlights/documents/{doc_typed_id}")
+        response = client_authenticated.get(f"/documents/{doc_typed_id}/highlights")
         assert response.status_code == 404
         data = response.json()
         assert data["error"]["code"] == "NOT_FOUND"
@@ -511,7 +511,7 @@ class TestListDocumentHighlights:
         db_session.add(hl_user2)
         db_session.flush()
 
-        response = client_authenticated.get(f"/highlights/documents/{doc_typed_id}")
+        response = client_authenticated.get(f"/documents/{doc_typed_id}/highlights")
 
         assert response.status_code == 200
         data = response.json()
@@ -549,7 +549,7 @@ class TestListUserHighlights:
         db_session.add(hl)
         db_session.flush()
 
-        response = client_authenticated.get(f"/highlights/users/{user_typed_id}")
+        response = client_authenticated.get(f"/users/{user_typed_id}/highlights")
 
         assert response.status_code == 200
         data = response.json()
@@ -565,7 +565,7 @@ class TestListUserHighlights:
         """Test listing highlights for user with no highlights."""
         user_typed_id = to_api_id("user", authenticated_user.id)
 
-        response = client_authenticated.get(f"/highlights/users/{user_typed_id}")
+        response = client_authenticated.get(f"/users/{user_typed_id}/highlights")
 
         assert response.status_code == 200
         data = response.json()
@@ -601,7 +601,7 @@ class TestListUserHighlights:
 
         # Get first page (limit=2)
         response1 = client_authenticated.get(
-            f"/highlights/users/{user_typed_id}",
+            f"/users/{user_typed_id}/highlights",
             params={"limit": 2},
         )
         assert response1.status_code == 200
@@ -612,7 +612,7 @@ class TestListUserHighlights:
 
         # Get second page
         response2 = client_authenticated.get(
-            f"/highlights/users/{user_typed_id}",
+            f"/users/{user_typed_id}/highlights",
             params={"limit": 2, "cursor": data1["next_cursor"]},
         )
         assert response2.status_code == 200
@@ -622,7 +622,7 @@ class TestListUserHighlights:
 
     def test_invalid_user_id_format(self, client_authenticated: TestClient):
         """Test that invalid user ID format returns 422."""
-        response = client_authenticated.get("/highlights/users/invalid_id")
+        response = client_authenticated.get("/users/invalid_id/highlights")
         assert response.status_code == 422
         data = response.json()
         assert data["error"]["code"] == "VALIDATION_ERROR"
@@ -631,7 +631,7 @@ class TestListUserHighlights:
         """Test that wrong typed ID (e.g., doc_ instead of usr_) returns 422."""
         doc_typed_id = to_api_id("document", test_document.id)
 
-        response = client_authenticated.get(f"/highlights/users/{doc_typed_id}")
+        response = client_authenticated.get(f"/users/{doc_typed_id}/highlights")
 
         assert response.status_code == 422
         data = response.json()
@@ -645,7 +645,7 @@ class TestListUserHighlights:
         """Test that accessing another user's highlights returns 404."""
         other_user_typed_id = to_api_id("user", other_user.id)
 
-        response = client_authenticated.get(f"/highlights/users/{other_user_typed_id}")
+        response = client_authenticated.get(f"/users/{other_user_typed_id}/highlights")
 
         assert response.status_code == 404
         data = response.json()
@@ -655,7 +655,7 @@ class TestListUserHighlights:
         """Test that unauthenticated request returns 401."""
         user_typed_id = to_api_id("user", authenticated_user.id)
 
-        response = client.get(f"/highlights/users/{user_typed_id}")
+        response = client.get(f"/users/{user_typed_id}/highlights")
 
         assert response.status_code == 401
         data = response.json()

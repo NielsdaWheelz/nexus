@@ -1,6 +1,6 @@
 """Highlights API routes for creation and retrieval.
 
-This module provides:
+Routes (spec-aligned):
 - POST /highlights: Create a new highlight with byte-range anchor
 - GET /documents/{document_id}/highlights: List highlights on a document
 - GET /users/{user_id}/highlights: List highlights created by a user
@@ -39,11 +39,12 @@ from app.services.highlights import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/highlights", tags=["highlights"])
+# Create base router for /highlights endpoints
+router = APIRouter(tags=["highlights"])
 
 
 @router.post(
-    "",
+    "/highlights",
     response_model=HighlightItem,
     status_code=201,
     summary="Create highlight",
@@ -197,7 +198,7 @@ async def create_highlight_endpoint(
 
 
 @router.get(
-    "/documents/{document_id}",
+    "/documents/{document_id}/highlights",
     response_model=HighlightListResponse,
     status_code=200,
     summary="List highlights for document",
@@ -289,7 +290,7 @@ async def list_document_highlights(
 
 
 @router.get(
-    "/users/{user_id}",
+    "/users/{user_id}/highlights",
     response_model=HighlightListResponse,
     status_code=200,
     summary="List user's highlights",

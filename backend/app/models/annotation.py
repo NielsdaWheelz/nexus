@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -14,12 +14,13 @@ from app.db.base import Base
 
 
 class Annotation(Base):
-    """Annotation model representing a user's note (text) on a highlight.
+    """Annotation model representing a user's note (text) attached to a highlight or chunk.
 
     Fields:
     - id: UUID primary key
     - user_id: FK to users.id (creator)
-    - highlight_id: FK to highlights.id (the highlight being annotated)
+    - highlight_id: FK to highlights.id (optional, the highlight being annotated)
+    - chunk_id: FK to content_chunks.id (optional, the chunk being annotated)
     - content: The annotation text (markdown or plain text)
     - is_public: Whether annotation is shared publicly
 
@@ -29,8 +30,8 @@ class Annotation(Base):
     - updated_at: UTC timestamp of last update
 
     Invariants:
-    - One annotation per highlight (enforced in schema)
-    - Annotations always reference valid highlights
+    - Exactly one of highlight_id or chunk_id must be set
+    - Annotations always reference valid highlights or chunks
     - Cascade delete when highlight is deleted
     """
 
@@ -40,8 +41,11 @@ class Annotation(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
     )
-    highlight_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("highlights.id"), nullable=False, index=True
+    highlight_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("highlights.id"), nullable=True, index=True
+    )
+    chunk_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("content_chunks.id"), nullable=True, index=True
     )
 
     content: Mapped[str] = mapped_column(Text, nullable=False)
@@ -63,7 +67,9 @@ class Annotation(Base):
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="annotations")
-    highlight: Mapped["Highlight"] = relationship("Highlight", back_populates="annotations")
+    highlight: Mapped[Optional["Highlight"]] = relationship(
+        "Highlight", back_populates="annotations"
+    )
     object_visibility: Mapped[list["ObjectLibraryVisibility"]] = relationship(
         "ObjectLibraryVisibility",
         foreign_keys="ObjectLibraryVisibility.object_id",
@@ -95,5 +101,10 @@ class Annotation(Base):
 
     __table_args__ = (
         Index("idx_annotations_highlight", highlight_id, postgresql_where="deleted_at IS NULL"),
+        Index("idx_annotations_chunk", chunk_id, postgresql_where="deleted_at IS NULL"),
         Index("idx_annotations_user", user_id, postgresql_where="deleted_at IS NULL"),
+        CheckConstraint(
+            "(highlight_id IS NOT NULL AND chunk_id IS NULL) OR (highlight_id IS NULL AND chunk_id IS NOT NULL)",
+            name="ck_annotations_exactly_one_anchor",
+        ),
     )

@@ -149,7 +149,9 @@ class AnnotationSummary(BaseModel):
     Attributes:
         id: Raw annotation UUID (not typed ID; conversion happens at API boundary)
         user_id: Raw user UUID (creator)
-        highlight_id: Raw highlight UUID (the highlight being annotated)
+        highlight_id: Optional raw highlight UUID (the highlight being annotated)
+        chunk_id: Optional raw chunk UUID (the chunk being annotated)
+        document_id: Optional raw document UUID (for convenience in listing)
         content: The annotation text content
         is_public: Whether annotation is shared publicly
         created_at: UTC timestamp of creation
@@ -158,7 +160,15 @@ class AnnotationSummary(BaseModel):
 
     id: UUID = Field(description="Raw annotation UUID")
     user_id: UUID = Field(description="Raw user UUID (creator)")
-    highlight_id: UUID = Field(description="Raw highlight UUID")
+    highlight_id: Optional[UUID] = Field(
+        default=None, description="Raw highlight UUID (if attached to highlight)"
+    )
+    chunk_id: Optional[UUID] = Field(
+        default=None, description="Raw chunk UUID (if attached to chunk)"
+    )
+    document_id: Optional[UUID] = Field(
+        default=None, description="Raw document UUID (for listing by document)"
+    )
     content: str = Field(description="Annotation text content")
     is_public: bool = Field(default=False, description="Whether annotation is public")
     created_at: datetime = Field(description="UTC timestamp of creation")
@@ -170,6 +180,8 @@ class AnnotationSummary(BaseModel):
                 "id": "44444444-5555-6666-7777-888888888888",
                 "user_id": "22222222-3333-4444-5555-666666666666",
                 "highlight_id": "11111111-2222-3333-4444-555555555555",
+                "chunk_id": None,
+                "document_id": "33333333-4444-5555-6666-777777777777",
                 "content": "This is an important passage.",
                 "is_public": False,
                 "created_at": "2025-01-01T12:00:00Z",
