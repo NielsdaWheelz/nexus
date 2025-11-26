@@ -98,8 +98,10 @@ def create_app() -> FastAPI:
 
     # Import and register documents router
     from app.api.routes.documents import router as documents_router
+    from app.api.routes.conversations import router as conversations_router
 
     app.include_router(documents_router)
+    app.include_router(conversations_router)
 
     # Include test-only routers (development and testing only)
     if settings.ENV in (Environment.DEVELOPMENT, Environment.STAGING):

@@ -46,8 +46,13 @@ class Conversation(Base):
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
     )
 
-    title: Mapped[str] = mapped_column(String(512), nullable=False)
+    title: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Message tracking
+    last_message_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Summary state (Phase 2+)
     summary_state: Mapped[Optional[dict[str, object]]] = mapped_column(JSON, nullable=True)
