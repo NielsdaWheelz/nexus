@@ -79,7 +79,9 @@ class TestSecurityHeadersPresent:
         mock_db_session = MagicMock()
         mock_session.return_value = mock_db_session
 
-        user = create_mock_user("00000000-0000-0000-0000-000000000001", "user_test_1", "test1@example.com")
+        user = create_mock_user(
+            "00000000-0000-0000-0000-000000000001", "user_test_1", "test1@example.com"
+        )
         mock_db_session.query.return_value.filter.return_value.first.return_value = user
 
         response = client.get(
@@ -143,9 +145,7 @@ class TestSecurityHeaderValues:
             client: TestClient fixture
         """
         response = client.get("/health")
-        assert (
-            response.headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
-        )
+        assert response.headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
 
     def test_x_xss_protection(self, client):
         """Test X-XSS-Protection header value.

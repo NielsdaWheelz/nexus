@@ -8,6 +8,7 @@ Per spec/schemas/chunks.md, there are three types of chunks:
 NOTE: Vector embeddings (pgvector) are added in PR 6.1 Embeddings Pipeline.
 This PR creates the table structure; embeddings column added later via migration.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -115,7 +116,9 @@ class ThoughtChunk(Base):
 
     object_type: Mapped[str] = mapped_column(String(30), nullable=False)
     object_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
+    )
 
     chunk_version: Mapped[str] = mapped_column(String(50), nullable=False)
     embedding_model: Mapped[str] = mapped_column(String(100), nullable=False)

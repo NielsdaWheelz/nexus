@@ -26,6 +26,7 @@ dependencies = [
     "redis>=5.0.0",
     "python-jose[cryptography]>=3.3.0",
     "httpx>=0.25.0",
+    "python-multipart>=0.0.6",
 ]
 
 [project.optional-dependencies]
@@ -75,6 +76,7 @@ lint.ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
+"app/api/routes/*.py" = ["B008"]  # FastAPI dependency defaults (File, Form, etc.)
 
 [tool.mypy]
 python_version = "3.11"

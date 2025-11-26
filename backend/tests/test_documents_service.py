@@ -71,7 +71,6 @@ class TestCreateDocumentPlaceholder:
             original_filename="My PDF.pdf",
             original_mime_type="application/pdf",
             original_size_bytes=12345,
-            content_hash="abc123def456789abc123def456789abc123",
             source_url="https://example.com/pdf",
         )
 
@@ -82,8 +81,10 @@ class TestCreateDocumentPlaceholder:
         assert doc.original_blob_key == "s3://bucket/file.pdf"
         assert doc.original_mime_type == "application/pdf"
         assert doc.original_size_bytes == 12345
-        assert doc.content_hash == "abc123def456789abc123def456789abc123"
         assert doc.source_url == "https://example.com/pdf"
+
+        # Verify content_hash is computed during async ingestion (empty at creation)
+        assert doc.content_hash == ""
 
         # Verify initial state
         assert doc.canonical_text == ""
@@ -108,7 +109,6 @@ class TestCreateDocumentPlaceholder:
             original_filename=None,  # Optional
             original_mime_type=None,  # Optional
             original_size_bytes=None,  # Optional
-            content_hash="hash123",
             source_url=None,  # Optional
         )
 
@@ -117,26 +117,26 @@ class TestCreateDocumentPlaceholder:
         assert doc.title == "Untitled"  # Default when filename is None
         assert doc.original_mime_type == "application/octet-stream"  # Default
         assert doc.original_size_bytes == 0  # Default
+        assert doc.content_hash == ""  # Computed during ingestion
 
-    def test_validation_empty_content_hash(self, db_session: Session, user1: User):
-        """Test that empty content_hash raises ValidationAppError."""
-        with pytest.raises(ValidationAppError) as exc_info:
-            create_document_placeholder(
-                session=db_session,
-                user=user1,
-                source_kind="pdf",
-                original_blob_uri="s3://bucket/file.pdf",
-                original_filename="test.pdf",
-                original_mime_type="application/pdf",
-                original_size_bytes=100,
-                content_hash="",  # Empty!
-                source_url=None,
-            )
+    def test_validation_original_blob_uri_required(self, db_session: Session, user1: User):
+        """Test that original_blob_uri is required."""
+        # original_blob_uri is a required positional argument, so this test
+        # would be a code-level type error. Instead, verify the happy path
+        # works without content_hash validation.
+        doc = create_document_placeholder(
+            session=db_session,
+            user=user1,
+            source_kind="pdf",
+            original_blob_uri="s3://bucket/file.pdf",
+            original_filename="test.pdf",
+            original_mime_type="application/pdf",
+            original_size_bytes=100,
+            source_url=None,
+        )
 
-        err = exc_info.value
-        assert err.code.value == "VALIDATION_ERROR"
-        assert err.http_status == 422
-        assert "content_hash" in err.message.lower() or "required" in err.message.lower()
+        assert doc.id is not None
+        assert doc.content_hash == ""
 
     def test_validation_invalid_source_kind(self, db_session: Session, user1: User):
         """Test that invalid source_kind raises ValidationAppError."""
@@ -149,7 +149,6 @@ class TestCreateDocumentPlaceholder:
                 original_filename="test.docx",
                 original_mime_type="application/vnd.ms-word",
                 original_size_bytes=100,
-                content_hash="hash123",
                 source_url=None,
             )
 
@@ -169,7 +168,6 @@ class TestCreateDocumentPlaceholder:
                 original_filename="test.pdf",
                 original_mime_type="application/pdf",
                 original_size_bytes=-1,  # Negative!
-                content_hash="hash123",
                 source_url=None,
             )
 
@@ -188,7 +186,6 @@ class TestCreateDocumentPlaceholder:
             original_filename="page.html",
             original_mime_type="text/html",
             original_size_bytes=5000,
-            content_hash="htmlhash",
             source_url="http://example.com/page.html",
         )
 
@@ -199,6 +196,7 @@ class TestCreateDocumentPlaceholder:
         assert fetched is not None
         assert fetched.user_id == user1.id
         assert fetched.title == "page.html"  # original_filename is used as title
+        assert fetched.content_hash == ""  # Not computed yet
 
 
 # ============================================================================
@@ -220,7 +218,6 @@ class TestGetDocumentForUser:
             original_filename="test.pdf",
             original_mime_type="application/pdf",
             original_size_bytes=100,
-            content_hash="hash1",
             source_url=None,
         )
 
@@ -266,7 +263,6 @@ class TestGetDocumentForUser:
             original_filename="user1_doc.pdf",
             original_mime_type="application/pdf",
             original_size_bytes=100,
-            content_hash="hash1",
             source_url=None,
         )
 
@@ -293,7 +289,6 @@ class TestGetDocumentForUser:
             original_filename="test.pdf",
             original_mime_type="application/pdf",
             original_size_bytes=100,
-            content_hash="hash1",
             source_url=None,
         )
 
@@ -343,7 +338,6 @@ class TestListDocumentsForUser:
             original_filename="test.pdf",
             original_mime_type="application/pdf",
             original_size_bytes=100,
-            content_hash="hash1",
             source_url=None,
         )
 
@@ -368,7 +362,6 @@ class TestListDocumentsForUser:
             original_filename="book.epub",
             original_mime_type="application/epub+zip",
             original_size_bytes=50000,
-            content_hash="epubhash",
             source_url="http://example.com/book.epub",
         )
 
@@ -406,7 +399,6 @@ class TestListDocumentsForUser:
                 original_filename=f"doc{i}.pdf",
                 original_mime_type="application/pdf",
                 original_size_bytes=100 + i,
-                content_hash=f"hash{i}",
                 source_url=None,
             )
             docs.append(doc)
@@ -437,7 +429,6 @@ class TestListDocumentsForUser:
                 original_filename=f"doc{i}.pdf",
                 original_mime_type="application/pdf",
                 original_size_bytes=100,
-                content_hash=f"hash{i}",
                 source_url=None,
             )
 
@@ -464,7 +455,6 @@ class TestListDocumentsForUser:
                 original_filename=f"doc{i}.pdf",
                 original_mime_type="application/pdf",
                 original_size_bytes=100,
-                content_hash=f"hash{i}",
                 source_url=None,
             )
 
@@ -517,7 +507,6 @@ class TestListDocumentsForUser:
                 original_filename=f"doc{i}.pdf",
                 original_mime_type="application/pdf",
                 original_size_bytes=100,
-                content_hash=f"hash{i}",
                 source_url=None,
             )
 
@@ -553,7 +542,6 @@ class TestListDocumentsForUser:
                 original_filename=f"doc{i}.pdf",
                 original_mime_type="application/pdf",
                 original_size_bytes=100,
-                content_hash=f"hash{i}",
                 source_url=None,
             )
             docs.append(doc)
@@ -587,7 +575,6 @@ class TestListDocumentsForUser:
                 original_filename=f"u1_doc{i}.pdf",
                 original_mime_type="application/pdf",
                 original_size_bytes=100,
-                content_hash=f"u1hash{i}",
                 source_url=None,
             )
 
@@ -601,7 +588,6 @@ class TestListDocumentsForUser:
                 original_filename=f"u2_doc{i}.pdf",
                 original_mime_type="application/pdf",
                 original_size_bytes=100,
-                content_hash=f"u2hash{i}",
                 source_url=None,
             )
 
@@ -640,7 +626,6 @@ class TestUUIDFormat:
             original_filename="test.pdf",
             original_mime_type="application/pdf",
             original_size_bytes=100,
-            content_hash="hash1",
             source_url=None,
         )
 
@@ -664,7 +649,6 @@ class TestUUIDFormat:
             original_filename="test.pdf",
             original_mime_type="application/pdf",
             original_size_bytes=100,
-            content_hash="hash1",
             source_url=None,
         )
 

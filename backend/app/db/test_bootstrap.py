@@ -42,9 +42,7 @@ def _ensure_test_database_exists(test_db_url: str) -> None:
     url = make_url(test_db_url)
     db_name = url.database
     if not db_name:
-        raise RuntimeError(
-            f"DATABASE_URL_TEST must include a database name. Got: {test_db_url}"
-        )
+        raise RuntimeError(f"DATABASE_URL_TEST must include a database name. Got: {test_db_url}")
 
     # Construct admin connection URL (same server, but connect to 'postgres' database)
     admin_url = url.set(database="postgres")
@@ -94,8 +92,9 @@ def _run_alembic_upgrade(test_db_url: str) -> None:
     Raises RuntimeError if migration fails.
     """
     try:
-        from alembic import command
         from alembic.config import Config
+
+        from alembic import command
 
         cfg = Config("alembic.ini")
         cfg.set_main_option("sqlalchemy.url", test_db_url)

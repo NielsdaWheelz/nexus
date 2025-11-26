@@ -8,7 +8,6 @@ Tests cover:
 - Health check exempt from rate limiting
 """
 
-import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -78,7 +77,9 @@ class TestAuthenticatedRateLimiting:
         mock_db_session = MagicMock()
         mock_session.return_value = mock_db_session
 
-        user = create_mock_user("00000000-0000-0000-0000-000000000001", "user_test_1", "test1@example.com")
+        user = create_mock_user(
+            "00000000-0000-0000-0000-000000000001", "user_test_1", "test1@example.com"
+        )
         mock_db_session.query.return_value.filter.return_value.first.return_value = user
 
         # Get limit for authenticated scope
@@ -115,7 +116,9 @@ class TestAuthenticatedRateLimiting:
         mock_db_session = MagicMock()
         mock_session.return_value = mock_db_session
 
-        user = create_mock_user("00000000-0000-0000-0000-000000000001", "user_test_1", "test1@example.com")
+        user = create_mock_user(
+            "00000000-0000-0000-0000-000000000001", "user_test_1", "test1@example.com"
+        )
         mock_db_session.query.return_value.filter.return_value.first.return_value = user
 
         # Get limit for authenticated scope
@@ -159,7 +162,9 @@ class TestAuthenticatedRateLimiting:
         mock_db_session = MagicMock()
         mock_session.return_value = mock_db_session
 
-        user = create_mock_user("00000000-0000-0000-0000-000000000001", "user_test_1", "test1@example.com")
+        user = create_mock_user(
+            "00000000-0000-0000-0000-000000000001", "user_test_1", "test1@example.com"
+        )
         mock_db_session.query.return_value.filter.return_value.first.return_value = user
 
         # Get limit for authenticated scope
@@ -191,7 +196,6 @@ class TestAuthenticatedRateLimiting:
         assert error["details"]["limit"] == limit
         assert error["details"]["window_seconds"] == window_seconds
         assert "trace_id" in error
-
 
 
 class TestAnonymousRateLimiting:

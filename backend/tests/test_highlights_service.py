@@ -38,7 +38,6 @@ from app.services.highlights import (
     soft_delete_highlight,
 )
 
-
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
@@ -148,7 +147,9 @@ def doc1(db_session: Session, user1: User) -> Document:
 class TestCreateHighlight:
     """Tests for create_highlight function."""
 
-    def test_create_highlight_text_anchor_valid(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_create_highlight_text_anchor_valid(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test creating a highlight with valid text anchor."""
         anchor = make_highlight_anchor(doc1.canonical_text, "is")
         result = create_highlight(
@@ -175,7 +176,9 @@ class TestCreateHighlight:
         assert result.is_detached is False
         assert result.is_public is False
 
-    def test_create_highlight_invalid_quote(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_create_highlight_invalid_quote(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test creating highlight with mismatched quote fails."""
         anchor = make_highlight_anchor(doc1.canonical_text, "is")
         anchor["quote"] = "WRONG"  # Override with invalid quote
@@ -192,7 +195,9 @@ class TestCreateHighlight:
         assert exc_info.value.code.value == "VALIDATION_ERROR"
         assert "quote" in str(exc_info.value.message).lower()
 
-    def test_create_highlight_invalid_prefix(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_create_highlight_invalid_prefix(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test creating highlight with mismatched prefix fails."""
         anchor = make_highlight_anchor(doc1.canonical_text, "is")
         anchor["prefix"] = "WRONG"  # Override with invalid prefix
@@ -209,7 +214,9 @@ class TestCreateHighlight:
         assert exc_info.value.code.value == "VALIDATION_ERROR"
         assert "prefix" in str(exc_info.value.message).lower()
 
-    def test_create_highlight_invalid_suffix(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_create_highlight_invalid_suffix(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test creating highlight with mismatched suffix fails."""
         anchor = make_highlight_anchor(doc1.canonical_text, "is")
         anchor["suffix"] = "WRONG"  # Override with invalid suffix
@@ -226,7 +233,9 @@ class TestCreateHighlight:
         assert exc_info.value.code.value == "VALIDATION_ERROR"
         assert "suffix" in str(exc_info.value.message).lower()
 
-    def test_create_highlight_negative_offset(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_create_highlight_negative_offset(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test creating highlight with negative offset fails."""
         anchor = make_highlight_anchor(doc1.canonical_text, "is")
         anchor["text_start"] = -1  # Override with invalid offset
@@ -242,7 +251,9 @@ class TestCreateHighlight:
             )
         assert exc_info.value.code.value == "VALIDATION_ERROR"
 
-    def test_create_highlight_end_before_start(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_create_highlight_end_before_start(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test creating highlight with end < start fails."""
         anchor = make_highlight_anchor(doc1.canonical_text, "is")
         anchor["text_end"] = anchor["text_start"] - 1  # Override: end < start
@@ -258,7 +269,9 @@ class TestCreateHighlight:
             )
         assert exc_info.value.code.value == "VALIDATION_ERROR"
 
-    def test_create_highlight_offset_out_of_bounds(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_create_highlight_offset_out_of_bounds(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test creating highlight with offset beyond text fails."""
         anchor = make_highlight_anchor(doc1.canonical_text, "is")
         text_len = len(doc1.canonical_text.encode("utf-8"))
@@ -275,7 +288,9 @@ class TestCreateHighlight:
             )
         assert exc_info.value.code.value == "VALIDATION_ERROR"
 
-    def test_create_highlight_no_document_not_found(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_create_highlight_no_document_not_found(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test creating highlight on non-existent document raises 404."""
         anchor = make_highlight_anchor(doc1.canonical_text, "test")
         with pytest.raises(NotFoundError):
@@ -289,7 +304,9 @@ class TestCreateHighlight:
                 canonical_version=1,
             )
 
-    def test_create_highlight_document_not_owned(self, db_session: Session, user1: User, user2: User, doc1: Document) -> None:
+    def test_create_highlight_document_not_owned(
+        self, db_session: Session, user1: User, user2: User, doc1: Document
+    ) -> None:
         """Test creating highlight on document not owned by user raises 404."""
         anchor = make_highlight_anchor(doc1.canonical_text, "test")
         with pytest.raises(NotFoundError):
@@ -303,7 +320,9 @@ class TestCreateHighlight:
                 canonical_version=1,
             )
 
-    def test_create_highlight_deleted_document(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_create_highlight_deleted_document(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test creating highlight on soft-deleted document raises 404."""
         anchor = make_highlight_anchor(doc1.canonical_text, "test")
         doc1.deleted_at = datetime.now(timezone.utc)
@@ -320,7 +339,9 @@ class TestCreateHighlight:
                 canonical_version=1,
             )
 
-    def test_create_highlight_pdf_anchor_valid(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_create_highlight_pdf_anchor_valid(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test creating highlight with valid PDF anchor."""
         result = create_highlight(
             session=db_session,
@@ -344,7 +365,9 @@ class TestCreateHighlight:
         assert result.pdf_char_offset == 10
         assert result.pdf_file_hash == "pdf_hash_123"
 
-    def test_create_highlight_pdf_anchor_missing_page_number(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_create_highlight_pdf_anchor_missing_page_number(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test creating PDF highlight without page number fails."""
         with pytest.raises(ValidationAppError):
             create_highlight(
@@ -363,7 +386,9 @@ class TestCreateHighlight:
                 pdf_file_hash="pdf_hash_123",
             )
 
-    def test_create_highlight_pdf_anchor_missing_char_offset(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_create_highlight_pdf_anchor_missing_char_offset(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test creating PDF highlight without char offset fails."""
         with pytest.raises(ValidationAppError):
             create_highlight(
@@ -382,7 +407,9 @@ class TestCreateHighlight:
                 pdf_file_hash="pdf_hash_123",
             )
 
-    def test_create_highlight_pdf_anchor_missing_file_hash(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_create_highlight_pdf_anchor_missing_file_hash(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test creating PDF highlight without file hash fails."""
         with pytest.raises(ValidationAppError):
             create_highlight(
@@ -401,7 +428,9 @@ class TestCreateHighlight:
                 pdf_file_hash=None,  # Missing
             )
 
-    def test_create_highlight_text_missing_canonical_version(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_create_highlight_text_missing_canonical_version(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test creating text highlight without canonical_version fails."""
         with pytest.raises(ValidationAppError):
             create_highlight(
@@ -427,7 +456,9 @@ class TestCreateHighlight:
 class TestGetHighlight:
     """Tests for get_highlight_for_user function."""
 
-    def test_get_highlight_own_highlight(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_get_highlight_own_highlight(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test retrieving own highlight."""
         anchor = make_highlight_anchor(doc1.canonical_text, "This")
         created = create_highlight(
@@ -458,7 +489,9 @@ class TestGetHighlight:
                 highlight_id=uuid.uuid4(),
             )
 
-    def test_get_highlight_not_owned(self, db_session: Session, user1: User, user2: User, doc1: Document) -> None:
+    def test_get_highlight_not_owned(
+        self, db_session: Session, user1: User, user2: User, doc1: Document
+    ) -> None:
         """Test retrieving highlight not owned by user raises 404."""
         anchor = make_highlight_anchor(doc1.canonical_text, "This")
         created = create_highlight(
@@ -551,7 +584,9 @@ class TestListHighlights:
         assert result.items[0].id == created.id
         assert result.has_more is False
 
-    def test_list_highlights_multiple(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_list_highlights_multiple(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test listing multiple highlights."""
         anchor1 = make_highlight_anchor(doc1.canonical_text, "This")
         h1 = create_highlight(
@@ -587,7 +622,9 @@ class TestListHighlights:
         assert result.items[0].id == h2.id
         assert result.items[1].id == h1.id
 
-    def test_list_highlights_pagination(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_list_highlights_pagination(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test pagination works correctly."""
         # Create 5 highlights
         anchor = make_highlight_anchor(doc1.canonical_text, "is")
@@ -644,7 +681,9 @@ class TestListHighlights:
         assert len(ids2 & ids3) == 0
         assert len(ids1 & ids3) == 0
 
-    def test_list_highlights_excludes_deleted(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_list_highlights_excludes_deleted(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test list excludes soft-deleted highlights."""
         anchor1 = make_highlight_anchor(doc1.canonical_text, "This")
         h1 = create_highlight(
@@ -685,7 +724,9 @@ class TestListHighlights:
         assert len(result.items) == 1
         assert result.items[0].id == h1.id
 
-    def test_list_highlights_only_own(self, db_session: Session, user1: User, user2: User, doc1: Document) -> None:
+    def test_list_highlights_only_own(
+        self, db_session: Session, user1: User, user2: User, doc1: Document
+    ) -> None:
         """Test list only includes user's own highlights."""
         anchor = make_highlight_anchor(doc1.canonical_text, "This")
         _ = create_highlight(
@@ -746,7 +787,9 @@ class TestSoftDeleteHighlight:
                 highlight_id=created.id,
             )
 
-    def test_soft_delete_already_deleted(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_soft_delete_already_deleted(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test soft-deleting already deleted highlight returns False."""
         anchor = make_highlight_anchor(doc1.canonical_text, "This")
         created = create_highlight(
@@ -783,7 +826,9 @@ class TestSoftDeleteHighlight:
                 highlight_id=uuid.uuid4(),
             )
 
-    def test_soft_delete_not_owned(self, db_session: Session, user1: User, user2: User, doc1: Document) -> None:
+    def test_soft_delete_not_owned(
+        self, db_session: Session, user1: User, user2: User, doc1: Document
+    ) -> None:
         """Test deleting highlight not owned by user raises 404."""
         anchor = make_highlight_anchor(doc1.canonical_text, "This")
         created = create_highlight(
@@ -812,7 +857,9 @@ class TestSoftDeleteHighlight:
 class TestCreateAnnotation:
     """Tests for create_annotation function."""
 
-    def test_create_annotation_valid(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_create_annotation_valid(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test creating annotation on valid highlight."""
         anchor = make_highlight_anchor(doc1.canonical_text, "This")
         hl = create_highlight(
@@ -838,7 +885,9 @@ class TestCreateAnnotation:
         assert result.content == "This is an important passage."
         assert result.is_public is False
 
-    def test_create_annotation_empty_content(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_create_annotation_empty_content(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test creating annotation with empty content fails."""
         anchor = make_highlight_anchor(doc1.canonical_text, "This")
         hl = create_highlight(
@@ -859,7 +908,9 @@ class TestCreateAnnotation:
                 content="",  # Empty
             )
 
-    def test_create_annotation_whitespace_content(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_create_annotation_whitespace_content(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test creating annotation with whitespace-only content fails."""
         anchor = make_highlight_anchor(doc1.canonical_text, "This")
         hl = create_highlight(
@@ -890,7 +941,9 @@ class TestCreateAnnotation:
                 content="Some content",
             )
 
-    def test_create_annotation_highlight_not_owned(self, db_session: Session, user1: User, user2: User, doc1: Document) -> None:
+    def test_create_annotation_highlight_not_owned(
+        self, db_session: Session, user1: User, user2: User, doc1: Document
+    ) -> None:
         """Test creating annotation on highlight not owned by user raises 404."""
         anchor = make_highlight_anchor(doc1.canonical_text, "This")
         hl = create_highlight(
@@ -911,7 +964,9 @@ class TestCreateAnnotation:
                 content="Some content",
             )
 
-    def test_create_annotation_highlight_deleted(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_create_annotation_highlight_deleted(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test creating annotation on soft-deleted highlight raises 404."""
         anchor = make_highlight_anchor(doc1.canonical_text, "This")
         hl = create_highlight(
@@ -970,7 +1025,9 @@ class TestListAnnotations:
         assert result.items == []
         assert result.has_more is False
 
-    def test_list_annotations_single(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_list_annotations_single(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test listing annotations on highlight with one."""
         anchor = make_highlight_anchor(doc1.canonical_text, "This")
         hl = create_highlight(
@@ -1000,7 +1057,9 @@ class TestListAnnotations:
         assert len(result.items) == 1
         assert result.items[0].id == ann.id
 
-    def test_list_annotations_multiple(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_list_annotations_multiple(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test listing multiple annotations."""
         anchor = make_highlight_anchor(doc1.canonical_text, "This")
         hl = create_highlight(
@@ -1039,7 +1098,9 @@ class TestListAnnotations:
         assert result.items[0].id == ann2.id
         assert result.items[1].id == ann1.id
 
-    def test_list_annotations_pagination(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_list_annotations_pagination(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test pagination for annotations."""
         anchor = make_highlight_anchor(doc1.canonical_text, "This")
         hl = create_highlight(
@@ -1087,7 +1148,9 @@ class TestListAnnotations:
         # Verify different annotations
         assert result1.items[0].id != result2.items[0].id
 
-    def test_list_annotations_excludes_deleted(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_list_annotations_excludes_deleted(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test list excludes soft-deleted annotations."""
         anchor = make_highlight_anchor(doc1.canonical_text, "This")
         hl = create_highlight(
@@ -1186,7 +1249,9 @@ class TestSoftDeleteAnnotation:
         )
         assert list_result.items == []
 
-    def test_soft_delete_already_deleted(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_soft_delete_already_deleted(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test soft-deleting already deleted annotation returns False."""
         anchor = make_highlight_anchor(doc1.canonical_text, "This")
         hl = create_highlight(
@@ -1229,7 +1294,9 @@ class TestSoftDeleteAnnotation:
                 annotation_id=uuid.uuid4(),
             )
 
-    def test_soft_delete_annotation_not_owned(self, db_session: Session, user1: User, user2: User, doc1: Document) -> None:
+    def test_soft_delete_annotation_not_owned(
+        self, db_session: Session, user1: User, user2: User, doc1: Document
+    ) -> None:
         """Test deleting annotation not owned by user raises 404."""
         anchor = make_highlight_anchor(doc1.canonical_text, "This")
         hl = create_highlight(
@@ -1265,7 +1332,9 @@ class TestSoftDeleteAnnotation:
 class TestDeterministicOrdering:
     """Tests for deterministic ordering of lists."""
 
-    def test_highlight_order_deterministic(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_highlight_order_deterministic(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test highlights are ordered consistently."""
         anchor = make_highlight_anchor(doc1.canonical_text, "is")
         ids = []
@@ -1300,7 +1369,9 @@ class TestDeterministicOrdering:
         order2 = [h.id for h in result2.items]
         assert order1 == order2
 
-    def test_annotation_order_deterministic(self, db_session: Session, user1: User, doc1: Document) -> None:
+    def test_annotation_order_deterministic(
+        self, db_session: Session, user1: User, doc1: Document
+    ) -> None:
         """Test annotations are ordered consistently."""
         anchor = make_highlight_anchor(doc1.canonical_text, "This")
         hl = create_highlight(

@@ -64,14 +64,30 @@ class HighlightSummary(BaseModel):
     quote: str = Field(description="The exact text of the highlight")
     prefix: str = Field(description="Context before the quote")
     suffix: str = Field(description="Context after the quote")
-    canonical_version: Optional[int] = Field(default=None, description="Canonical version (documents only)")
-    transcript_hash: Optional[str] = Field(default=None, description="Transcript hash (episodes/videos only)")
-    pdf_page_number: Optional[int] = Field(default=None, description="PDF page number (PDF anchors only)")
-    pdf_char_offset: Optional[int] = Field(default=None, description="PDF char offset (PDF anchors only)")
-    pdf_file_hash: Optional[str] = Field(default=None, description="PDF file hash (PDF anchors only)")
-    pdf_extraction_confidence: Optional[float] = Field(default=None, description="PDF extraction confidence (PDF anchors only)")
-    time_start: Optional[float] = Field(default=None, description="Start time in seconds (transcript anchors only)")
-    time_end: Optional[float] = Field(default=None, description="End time in seconds (transcript anchors only)")
+    canonical_version: Optional[int] = Field(
+        default=None, description="Canonical version (documents only)"
+    )
+    transcript_hash: Optional[str] = Field(
+        default=None, description="Transcript hash (episodes/videos only)"
+    )
+    pdf_page_number: Optional[int] = Field(
+        default=None, description="PDF page number (PDF anchors only)"
+    )
+    pdf_char_offset: Optional[int] = Field(
+        default=None, description="PDF char offset (PDF anchors only)"
+    )
+    pdf_file_hash: Optional[str] = Field(
+        default=None, description="PDF file hash (PDF anchors only)"
+    )
+    pdf_extraction_confidence: Optional[float] = Field(
+        default=None, description="PDF extraction confidence (PDF anchors only)"
+    )
+    time_start: Optional[float] = Field(
+        default=None, description="Start time in seconds (transcript anchors only)"
+    )
+    time_end: Optional[float] = Field(
+        default=None, description="End time in seconds (transcript anchors only)"
+    )
     color: str = Field(default="yellow", description="Highlight color")
     is_hidden: bool = Field(default=False, description="Whether highlight is hidden")
     is_detached: bool = Field(default=False, description="Whether highlight is detached")

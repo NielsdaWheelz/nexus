@@ -14,10 +14,9 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.core.errors import ErrorCode
 from app.core.auth.jwks import _jwks_cache, invalidate_jwks_cache
+from app.core.errors import ErrorCode
 from app.main import create_app
-
 
 # ============================================================================
 # FIXTURES
@@ -108,6 +107,7 @@ def test_auth_me_valid_token_response_shape(mock_verify, mock_session, client):
     - Response timestamps are ISO8601 formatted
     """
     from unittest.mock import MagicMock
+
     from app.models.user import User
 
     external_user_id = "clerk_user_xyz"
@@ -136,6 +136,7 @@ def test_auth_me_valid_token_response_shape(mock_verify, mock_session, client):
     )
     # Add timestamps
     from datetime import datetime, timezone
+
     test_user.created_at = datetime.now(timezone.utc)
     test_user.updated_at = datetime.now(timezone.utc)
 
@@ -197,6 +198,7 @@ def test_auth_me_request_state_user_id_populated(mock_verify, mock_session, clie
     the logging middleware can include it in structured logs.
     """
     from unittest.mock import MagicMock
+
     from app.models.user import User
 
     external_user_id = "clerk_user_logging"
@@ -216,7 +218,9 @@ def test_auth_me_request_state_user_id_populated(mock_verify, mock_session, clie
     mock_session.return_value = mock_db_session
 
     # User doesn't exist, create new
-    from datetime import datetime, timezone as tz
+    from datetime import datetime
+    from datetime import timezone as tz
+
     mock_db_session.query.return_value.filter.return_value.first.return_value = None
     test_user = User(
         id=user_id,
@@ -332,7 +336,6 @@ def test_health_endpoint_public(client):
 @patch("app.core.auth.jwks.httpx.AsyncClient.get")
 async def test_jwks_cache_invalidation_function(mock_get):
     """Test JWKS cache invalidation function."""
-    from app.core.auth.jwks import fetch_jwks
 
     # Reset cache
     invalidate_jwks_cache()

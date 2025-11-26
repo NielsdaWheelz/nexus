@@ -41,8 +41,8 @@ def create_document_placeholder(
     original_filename: str | None,
     original_mime_type: str | None,
     original_size_bytes: int | None,
-    content_hash: str,
     source_url: str | None,
+    title: str | None = None,
 ) -> Document:
     """Create a placeholder document for later ingestion and canonical text extraction.
 
@@ -64,15 +64,14 @@ def create_document_placeholder(
         original_filename: Original filename (optional, for reference)
         original_mime_type: MIME type of original file
         original_size_bytes: File size in bytes
-        content_hash: SHA256 hash of original blob (NOT canonical text)
         source_url: Optional URL where document was sourced from
+        title: Optional explicit title (overrides filename)
 
     Returns:
         Newly created Document ORM object (with id set)
 
     Raises:
         ValidationAppError: If required arguments are missing/malformed
-            - Empty content_hash
             - Invalid source_kind
             - Negative size_bytes
 
@@ -85,17 +84,11 @@ def create_document_placeholder(
         ...     original_filename="document.pdf",
         ...     original_mime_type="application/pdf",
         ...     original_size_bytes=12345,
-        ...     content_hash="abc123def456...",
-        ...     source_url="https://example.com/doc.pdf"
+        ...     source_url="https://example.com/doc.pdf",
+        ...     title="My Document Title"
         ... )
     """
     # Validate required arguments
-    if not content_hash or not content_hash.strip():
-        raise ValidationAppError(
-            message="content_hash is required and cannot be empty",
-            details={"field": "content_hash"},
-        )
-
     if source_kind not in ("pdf", "epub", "html"):
         raise ValidationAppError(
             message=f"source_kind must be one of: pdf, epub, html (got {source_kind})",
@@ -110,14 +103,16 @@ def create_document_placeholder(
 
     # Create document with initial state
     now = datetime.now(timezone.utc)
+    # Resolve title: explicit override > filename > default
+    resolved_title = title or original_filename or "Untitled"
     doc = Document(
         user_id=user.id,
-        title=original_filename or "Untitled",  # Use filename as default title
+        title=resolved_title,
         source_url=source_url,
         original_blob_key=original_blob_uri,
         original_mime_type=original_mime_type or "application/octet-stream",
         original_size_bytes=original_size_bytes or 0,
-        content_hash=content_hash,
+        content_hash="",  # Computed during ingestion
         canonical_text="",  # Empty until extraction
         canonical_hash="",  # Empty until extraction
         canonical_version=1,
