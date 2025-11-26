@@ -737,61 +737,119 @@ def create_annotation(
     *,
     session: Session,
     user: User,
-    highlight_id: UUID,
-    content: str,
+    highlight_id: Optional[UUID] = None,
+    chunk_id: Optional[UUID] = None,
+    content: str = "",
 ) -> AnnotationSummary:
-    """Create an annotation on a highlight.
+    """Create an annotation on a highlight or chunk.
 
     This function enforces:
-    1. Highlight exists and belongs to user
-    2. Highlight is not soft-deleted
-    3. Annotation content is non-empty
+    1. Exactly one of highlight_id or chunk_id is provided
+    2. Highlight/chunk exists and belongs to user (or is accessible)
+    3. Highlight/chunk is not soft-deleted
+    4. Annotation content is non-empty
 
     Args:
         session: SQLAlchemy database session
         user: Authenticated user (annotation creator)
-        highlight_id: Raw UUID of the highlight
+        highlight_id: Optional raw UUID of the highlight
+        chunk_id: Optional raw UUID of the chunk
         content: The annotation text
 
     Returns:
         AnnotationSummary with the created annotation
 
     Raises:
-        NotFoundError: If highlight doesn't exist, is not owned by user, or is deleted
-        ValidationAppError: If content is empty
+        NotFoundError: If highlight/chunk doesn't exist, is not accessible to user, or is deleted
+        ValidationAppError: If content is empty or both/neither highlight_id/chunk_id provided
     """
-    # Validate content is non-empty
+    # Validate exactly one of highlight_id or chunk_id is provided
     if not content or not content.strip():
         raise ValidationAppError(
             message="Annotation content cannot be empty",
             details={"field": "content"},
         )
 
-    # Verify highlight exists, is owned by user, and is not deleted
-    hl = (
-        session.query(Highlight)
-        .filter(
-            and_(
-                Highlight.id == highlight_id,
-                Highlight.user_id == user.id,
-                Highlight.deleted_at.is_(None),
-            )
+    if (highlight_id is None and chunk_id is None) or (
+        highlight_id is not None and chunk_id is not None
+    ):
+        raise ValidationAppError(
+            message="Must provide exactly one of highlight_id or chunk_id",
+            details={"fields": ["highlight_id", "chunk_id"]},
         )
-        .first()
-    )
 
-    if not hl:
-        raise NotFoundError(
-            message="Highlight not found",
-            details={"resource_type": "highlight"},
+    document_id = None
+
+    # Verify highlight/chunk exists and is accessible to user
+    if highlight_id is not None:
+        hl = (
+            session.query(Highlight)
+            .filter(
+                and_(
+                    Highlight.id == highlight_id,
+                    Highlight.user_id == user.id,
+                    Highlight.deleted_at.is_(None),
+                )
+            )
+            .first()
         )
+
+        if not hl:
+            raise NotFoundError(
+                message="Highlight not found",
+                details={"resource_type": "highlight"},
+            )
+
+        # Get document_id from highlight for document-level queries
+        if hl.media_type == "document":
+            document_id = hl.media_id
+    else:
+        # chunk_id is not None
+        from app.models.chunk import ContentChunk
+
+        chunk = session.query(ContentChunk).filter(ContentChunk.id == chunk_id).first()
+
+        if not chunk:
+            raise NotFoundError(
+                message="Chunk not found",
+                details={"resource_type": "chunk"},
+            )
+
+        # ACL: Verify chunk's document belongs to user
+        if chunk.media_type == "document":
+            doc = (
+                session.query(Document)
+                .filter(
+                    and_(
+                        Document.id == chunk.media_id,
+                        Document.user_id == user.id,
+                        Document.deleted_at.is_(None),
+                    )
+                )
+                .first()
+            )
+
+            if not doc:
+                raise NotFoundError(
+                    message="Chunk not found",
+                    details={"resource_type": "chunk"},
+                )
+
+            document_id = chunk.media_id
+        else:
+            # Phase 1: only documents supported
+            raise NotFoundError(
+                message="Chunk not found",
+                details={"resource_type": "chunk"},
+            )
 
     # Create annotation
     now = datetime.now(timezone.utc)
     annotation = Annotation(
         user_id=user.id,
         highlight_id=highlight_id,
-        content=content,
+        chunk_id=chunk_id,
+        content=content.strip(),
         is_public=False,
         created_at=now,
         updated_at=now,
@@ -804,6 +862,8 @@ def create_annotation(
         id=annotation.id,
         user_id=annotation.user_id,
         highlight_id=annotation.highlight_id,
+        chunk_id=annotation.chunk_id,
+        document_id=document_id,
         content=annotation.content,
         is_public=annotation.is_public,
         created_at=annotation.created_at,
@@ -928,6 +988,158 @@ def list_annotations_for_highlight(
     )
 
 
+def get_annotation_for_user(
+    *,
+    session: Session,
+    user: User,
+    annotation_id: UUID,
+) -> AnnotationSummary:
+    """Retrieve an annotation by ID with ownership and soft-delete checks.
+
+    This function enforces:
+    1. Annotation exists (by UUID)
+    2. Annotation belongs to user (user_id == user.id)
+    3. Annotation is not soft-deleted (deleted_at IS NULL)
+
+    If any check fails, raises NotFoundError with generic message (no information leak).
+
+    Args:
+        session: SQLAlchemy database session
+        user: Authenticated user (must be annotation owner)
+        annotation_id: Raw UUID of annotation
+
+    Returns:
+        AnnotationSummary
+
+    Raises:
+        NotFoundError: If annotation doesn't exist, is not owned by user, or is deleted
+    """
+    ann = (
+        session.query(Annotation)
+        .filter(
+            and_(
+                Annotation.id == annotation_id,
+                Annotation.user_id == user.id,
+                Annotation.deleted_at.is_(None),
+            )
+        )
+        .first()
+    )
+
+    if not ann:
+        raise NotFoundError(
+            message="Annotation not found",
+            details={"resource_type": "annotation"},
+        )
+
+    # Determine document_id from highlight or chunk
+    document_id = None
+    if ann.highlight_id is not None:
+        hl = session.query(Highlight).filter(Highlight.id == ann.highlight_id).first()
+        if hl and hl.media_type == "document":
+            document_id = hl.media_id
+    elif ann.chunk_id is not None:
+        from app.models.chunk import ContentChunk
+
+        chunk = session.query(ContentChunk).filter(ContentChunk.id == ann.chunk_id).first()
+        if chunk and chunk.media_type == "document":
+            document_id = chunk.media_id
+
+    return AnnotationSummary(
+        id=ann.id,
+        user_id=ann.user_id,
+        highlight_id=ann.highlight_id,
+        chunk_id=ann.chunk_id,
+        document_id=document_id,
+        content=ann.content,
+        is_public=ann.is_public,
+        created_at=ann.created_at,
+        updated_at=ann.updated_at,
+    )
+
+
+def update_annotation(
+    *,
+    session: Session,
+    user: User,
+    annotation_id: UUID,
+    content: str,
+) -> AnnotationSummary:
+    """Update an annotation's content.
+
+    This function enforces:
+    1. Annotation exists (by UUID)
+    2. Annotation belongs to user (user_id == user.id)
+    3. Annotation is not soft-deleted
+    4. New content is non-empty
+
+    Args:
+        session: SQLAlchemy database session
+        user: Authenticated user (must be annotation owner)
+        annotation_id: Raw UUID of annotation
+        content: Updated annotation text
+
+    Returns:
+        Updated AnnotationSummary
+
+    Raises:
+        NotFoundError: If annotation doesn't exist, is not owned by user, or is deleted
+        ValidationAppError: If content is empty
+    """
+    if not content or not content.strip():
+        raise ValidationAppError(
+            message="Annotation content cannot be empty",
+            details={"field": "content"},
+        )
+
+    ann = (
+        session.query(Annotation)
+        .filter(
+            and_(
+                Annotation.id == annotation_id,
+                Annotation.user_id == user.id,
+                Annotation.deleted_at.is_(None),
+            )
+        )
+        .first()
+    )
+
+    if not ann:
+        raise NotFoundError(
+            message="Annotation not found",
+            details={"resource_type": "annotation"},
+        )
+
+    ann.content = content.strip()
+    ann.updated_at = datetime.now(timezone.utc)
+    session.flush()
+
+    # Determine document_id from highlight or chunk
+    document_id = None
+    if ann.highlight_id is not None:
+        hl = session.query(Highlight).filter(Highlight.id == ann.highlight_id).first()
+        if hl and hl.media_type == "document":
+            document_id = hl.media_id
+    elif ann.chunk_id is not None:
+        from app.models.chunk import ContentChunk
+
+        chunk = session.query(ContentChunk).filter(ContentChunk.id == ann.chunk_id).first()
+        if chunk and chunk.media_type == "document":
+            document_id = chunk.media_id
+
+    return AnnotationSummary(
+        id=ann.id,
+        user_id=ann.user_id,
+        highlight_id=ann.highlight_id,
+        chunk_id=ann.chunk_id,
+        document_id=document_id,
+        content=ann.content,
+        is_public=ann.is_public,
+        created_at=ann.created_at,
+        updated_at=ann.updated_at,
+    )
+
+
 def soft_delete_annotation(
     *,
     session: Session,
@@ -977,3 +1189,251 @@ def soft_delete_annotation(
     session.flush()
 
     return True
+
+
+def list_annotations_for_document(
+    *,
+    session: Session,
+    user: User,
+    document_id: UUID,
+    pagination: PaginationParams,
+) -> PaginatedResponse[AnnotationSummary]:
+    """List all annotations on a document owned by user with cursor pagination.
+
+    This function returns annotations in deterministic order:
+    ORDER BY created_at DESC, id DESC (newest first)
+
+    Filters:
+    - Only annotations on highlights/chunks from the specified document
+    - Only document owned by user
+    - Excludes soft-deleted annotations
+
+    Args:
+        session: SQLAlchemy database session
+        user: Authenticated user
+        document_id: UUID of the document
+        pagination: PaginationParams with limit and optional cursor
+
+    Returns:
+        PaginatedResponse[AnnotationSummary]
+
+    Raises:
+        NotFoundError: If document doesn't exist or is not owned by user
+        ValidationAppError: If cursor is invalid
+    """
+    # Verify document exists and is owned by user
+    doc = (
+        session.query(Document)
+        .filter(
+            and_(
+                Document.id == document_id,
+                Document.user_id == user.id,
+                Document.deleted_at.is_(None),
+            )
+        )
+        .first()
+    )
+
+    if not doc:
+        raise NotFoundError(
+            message="Document not found",
+            details={"resource_type": "document"},
+        )
+
+    # Decode cursor to get keyset values
+    last_created_at, last_id = _decode_pagination_cursor(pagination.cursor)
+
+    # Base query: annotations on highlights/chunks of this document, not deleted
+    # Join with highlights to filter by document
+    query = session.query(Annotation).filter(
+        and_(
+            Annotation.deleted_at.is_(None),
+            # Either highlight from this document OR chunk from this document
+        )
+    )
+
+    # Filter by document via highlight or chunk
+    # For highlights: media_type='document' and media_id=document_id
+    # For chunks: media_type='document' and media_id=document_id
+    from sqlalchemy import or_
+
+    from app.models.chunk import ContentChunk
+
+    highlight_doc_filter = and_(
+        Annotation.highlight_id.isnot(None),
+        Highlight.media_type == "document",
+        Highlight.media_id == document_id,
+    )
+
+    chunk_doc_filter = and_(
+        Annotation.chunk_id.isnot(None),
+        ContentChunk.media_type == "document",
+        ContentChunk.media_id == document_id,
+    )
+
+    query = (
+        query.outerjoin(Highlight, Annotation.highlight_id == Highlight.id)
+        .outerjoin(ContentChunk, Annotation.chunk_id == ContentChunk.id)
+        .filter(or_(highlight_doc_filter, chunk_doc_filter))
+    )
+
+    # Apply cursor filtering (keyset pagination)
+    if last_created_at is not None and last_id is not None:
+        query = query.filter(
+            (Annotation.created_at < last_created_at)
+            | (
+                and_(
+                    Annotation.created_at == last_created_at,
+                    Annotation.id < last_id,
+                )
+            )
+        )
+
+    # Sort: newest first (created_at DESC), then by id DESC
+    query = query.order_by(desc(Annotation.created_at), desc(Annotation.id))
+
+    # Fetch limit+1 to determine if there are more results
+    annotations = query.limit(pagination.limit + 1).all()
+
+    has_more = len(annotations) > pagination.limit
+    if has_more:
+        annotations = annotations[: pagination.limit]
+
+    # Build next cursor
+    next_cursor = None
+    if has_more and annotations:
+        last_ann = annotations[-1]
+        next_cursor = encode_cursor(
+            {
+                "created_at": last_ann.created_at.isoformat(),
+                "id": str(last_ann.id),
+            }
+        )
+
+    # Convert to summaries
+    items = [
+        AnnotationSummary(
+            id=ann.id,
+            user_id=ann.user_id,
+            highlight_id=ann.highlight_id,
+            chunk_id=ann.chunk_id,
+            document_id=document_id,
+            content=ann.content,
+            is_public=ann.is_public,
+            created_at=ann.created_at,
+            updated_at=ann.updated_at,
+        )
+        for ann in annotations
+    ]
+
+    return PaginatedResponse(
+        items=items,
+        next_cursor=next_cursor,
+        has_more=has_more,
+    )
+
+
+def list_annotations_for_user(
+    *,
+    session: Session,
+    user: User,
+    pagination: PaginationParams,
+) -> PaginatedResponse[AnnotationSummary]:
+    """List all annotations created by user with cursor pagination.
+
+    This function returns annotations in deterministic order:
+    ORDER BY created_at DESC, id DESC (newest first)
+
+    Filters:
+    - Only annotations created by user (user_id == user.id)
+    - Excludes soft-deleted annotations
+
+    Args:
+        session: SQLAlchemy database session
+        user: Authenticated user
+        pagination: PaginationParams with limit and optional cursor
+
+    Returns:
+        PaginatedResponse[AnnotationSummary]
+
+    Raises:
+        ValidationAppError: If cursor is invalid
+    """
+    # Decode cursor to get keyset values
+    last_created_at, last_id = _decode_pagination_cursor(pagination.cursor)
+
+    # Base query: annotations created by user, not deleted
+    query = session.query(Annotation).filter(
+        and_(
+            Annotation.user_id == user.id,
+            Annotation.deleted_at.is_(None),
+        )
+    )
+
+    # Apply cursor filtering (keyset pagination)
+    if last_created_at is not None and last_id is not None:
+        query = query.filter(
+            (Annotation.created_at < last_created_at)
+            | (
+                and_(
+                    Annotation.created_at == last_created_at,
+                    Annotation.id < last_id,
+                )
+            )
+        )
+
+    # Sort: newest first (created_at DESC), then by id DESC
+    query = query.order_by(desc(Annotation.created_at), desc(Annotation.id))
+
+    # Fetch limit+1 to determine if there are more results
+    annotations = query.limit(pagination.limit + 1).all()
+
+    has_more = len(annotations) > pagination.limit
+    if has_more:
+        annotations = annotations[: pagination.limit]
+
+    # Build next cursor
+    next_cursor = None
+    if has_more and annotations:
+        last_ann = annotations[-1]
+        next_cursor = encode_cursor(
+            {
+                "created_at": last_ann.created_at.isoformat(),
+                "id": str(last_ann.id),
+            }
+        )
+
+    # Convert to summaries (need to fetch document_id for each)
+    from app.models.chunk import ContentChunk
+
+    items = []
+    for ann in annotations:
+        document_id = None
+        if ann.highlight_id is not None:
+            hl = session.query(Highlight).filter(Highlight.id == ann.highlight_id).first()
+            if hl and hl.media_type == "document":
+                document_id = hl.media_id
+        elif ann.chunk_id is not None:
+            chunk = session.query(ContentChunk).filter(ContentChunk.id == ann.chunk_id).first()
+            if chunk and chunk.media_type == "document":
+                document_id = chunk.media_id
+
+        items.append(
+            AnnotationSummary(
+                id=ann.id,
+                user_id=ann.user_id,
+                highlight_id=ann.highlight_id,
+                chunk_id=ann.chunk_id,
+                document_id=document_id,
+                content=ann.content,
+                is_public=ann.is_public,
+                created_at=ann.created_at,
+                updated_at=ann.updated_at,
+            )
+        )
+
+    return PaginatedResponse(
+        items=items,
+        next_cursor=next_cursor,
+        has_more=has_more,
+    )
