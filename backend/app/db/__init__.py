@@ -27,6 +27,7 @@ from app.models.library import (
 )  # noqa: F401
 from app.models.link import Link  # noqa: F401
 from app.models.message import Message  # noqa: F401
+from app.models.reader import Reader  # noqa: F401
 
 # Import all models so Alembic can discover them
 # Order matters: import parent models before child models (FK references)
@@ -46,6 +47,7 @@ __all__ = [
     "Annotation",
     "Conversation",
     "Message",
+    "Reader",
     "Library",
     "LibraryMembership",
     "LibraryMedia",

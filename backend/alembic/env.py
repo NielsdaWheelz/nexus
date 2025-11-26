@@ -34,6 +34,7 @@ from app.db import (  # noqa: F401
     Message,
     MetadataChunk,
     ObjectLibraryVisibility,
+    Reader,
     ThoughtChunk,
     User,
 )
@@ -90,9 +91,13 @@ def run_migrations_online() -> None:
     """Run migrations in 'online' mode (sync).
 
     Uses synchronous SQLAlchemy engine for migrations.
-    Supports DATABASE_URL_TEST for test database migrations.
+
+    Database selection:
+    - For 'alembic revision' (autogenerate): Always uses dev DATABASE_URL
+    - For 'alembic upgrade' (running migrations): Uses DATABASE_URL_TEST if set, else dev DATABASE_URL
     """
     import os
+    import sys
 
     from sqlalchemy import create_engine
 
@@ -100,9 +105,16 @@ def run_migrations_online() -> None:
 
     settings = get_settings()
 
-    # Support DATABASE_URL_TEST for test database bootstrap
-    # This allows pytest test bootstrap to run migrations against test_nexus
-    db_url = os.environ.get("DATABASE_URL_TEST") or settings.DATABASE_URL
+    # Detect if we're in autogenerate mode by checking command line args
+    # alembic revision is for creating migrations, alembic upgrade is for running them
+    is_autogenerate = "revision" in sys.argv
+
+    if is_autogenerate:
+        # For autogenerate, always use dev database to compare current schema
+        db_url = settings.DATABASE_URL
+    else:
+        # For running migrations, support DATABASE_URL_TEST for test environment
+        db_url = os.environ.get("DATABASE_URL_TEST") or settings.DATABASE_URL
 
     # Convert async URL to sync for migrations
     if db_url.startswith("postgresql+asyncpg"):

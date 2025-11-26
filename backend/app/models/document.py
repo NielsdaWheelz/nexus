@@ -170,6 +170,9 @@ class Document(Base):
         cascade="all, delete-orphan",
         overlaps="links_as_target",
     )
+    readers: Mapped[list["Reader"]] = relationship(
+        "Reader", back_populates="document", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("idx_documents_user", user_id),

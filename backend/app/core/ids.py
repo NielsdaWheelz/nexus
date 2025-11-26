@@ -17,6 +17,7 @@ Prefix registry:
 - lib: Library
 - lnk: Link
 - chunk: Chunk (ContentChunk)
+- rdr: Reader
 """
 
 from typing import Literal
@@ -33,6 +34,7 @@ ObjectType = Literal[
     "library",
     "link",
     "chunk",
+    "reader",
 ]
 
 # Mapping from object type to prefix
@@ -46,6 +48,7 @@ TYPE_TO_PREFIX: dict[ObjectType, str] = {
     "library": "lib",
     "link": "lnk",
     "chunk": "chunk",
+    "reader": "rdr",
 }
 
 # Reverse mapping from prefix to object type
