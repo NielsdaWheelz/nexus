@@ -37,7 +37,6 @@ from app.models.highlight import Highlight
 from app.models.user import User
 from app.schemas.highlights import AnnotationSummary, HighlightSummary
 
-
 # ============================================================================
 # ANCHOR VALIDATION
 # ============================================================================
@@ -82,7 +81,11 @@ def _validate_text_anchor(
     if text_end > len(canonical_bytes):
         raise ValidationAppError(
             message=f"text_end ({text_end}) exceeds canonical_text length ({len(canonical_bytes)})",
-            details={"field": "text_end", "value": text_end, "canonical_length": len(canonical_bytes)},
+            details={
+                "field": "text_end",
+                "value": text_end,
+                "canonical_length": len(canonical_bytes),
+            },
         )
 
     # Validate quote matches
@@ -203,7 +206,11 @@ def _validate_transcript_anchor(
     if text_end > len(transcript_bytes):
         raise ValidationAppError(
             message=f"text_end ({text_end}) exceeds transcript_text length ({len(transcript_bytes)})",
-            details={"field": "text_end", "value": text_end, "transcript_length": len(transcript_bytes)},
+            details={
+                "field": "text_end",
+                "value": text_end,
+                "transcript_length": len(transcript_bytes),
+            },
         )
 
     # Validate quote matches

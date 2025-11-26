@@ -111,12 +111,16 @@ def app(db_session: Session):
 
     The app is configured to use the test database session fixture
     instead of the default production session.
+
+    CRITICAL: override_get_session must be a generator to match the signature
+    of get_session(), which is Generator[Session, None, None].
     """
     app = create_app()
 
     # Override the session dependency to use test session
-    def override_get_session() -> Session:
-        return db_session
+    # MUST be a generator to match get_session() signature
+    def override_get_session() -> Generator[Session, None, None]:
+        yield db_session
 
     app.dependency_overrides[_get_session] = override_get_session
 

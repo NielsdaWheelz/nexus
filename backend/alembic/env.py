@@ -1,11 +1,9 @@
-import asyncio
 import os
 import sys
 from logging.config import fileConfig
 
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
@@ -22,25 +20,24 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Import the Base and models for autogenerate to work
-from app.db.base import Base
-
 # Import all models so they are registered with Base.metadata
 from app.db import (  # noqa: F401
-    User,
+    Annotation,
+    ContentChunk,
+    Conversation,
     Document,
     Highlight,
-    Annotation,
-    Conversation,
-    Message,
     Library,
-    LibraryMembership,
     LibraryMedia,
-    ObjectLibraryVisibility,
+    LibraryMembership,
     Link,
-    ContentChunk,
-    ThoughtChunk,
+    Message,
     MetadataChunk,
+    ObjectLibraryVisibility,
+    ThoughtChunk,
+    User,
 )
+from app.db.base import Base
 
 # target_metadata is used for autogenerate support
 target_metadata = Base.metadata
@@ -96,7 +93,9 @@ def run_migrations_online() -> None:
     Supports DATABASE_URL_TEST for test database migrations.
     """
     import os
+
     from sqlalchemy import create_engine
+
     from app.core.config import get_settings
 
     settings = get_settings()

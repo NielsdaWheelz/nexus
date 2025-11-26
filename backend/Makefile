@@ -15,10 +15,8 @@ PYTHON := $(VENV)/bin/python
 UV := uv
 
 install:
-	@echo "Creating virtual environment..."
-	$(UV) venv
 	@echo "Installing dependencies..."
-	$(UV) pip install -e ".[dev]"
+	$(UV) sync --all-extras
 	@echo "✓ Dependencies installed"
 
 test: install

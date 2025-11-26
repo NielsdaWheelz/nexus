@@ -113,9 +113,7 @@ class TestAppErrorHandler:
         assert data["error"]["code"] == "PERMISSION_DENIED"
         assert data["error"]["message"] == "User cannot access this resource"
 
-    def test_not_found_error(
-        self, app_with_error_handlers: FastAPI, client: TestClient
-    ) -> None:
+    def test_not_found_error(self, app_with_error_handlers: FastAPI, client: TestClient) -> None:
         """Test NotFoundError convenience class (404 status)."""
 
         @app_with_error_handlers.get("/test-not-found")

@@ -1,4 +1,5 @@
 """Document model for uploaded files and their canonical text representations."""
+
 from __future__ import annotations
 
 import uuid
@@ -71,7 +72,9 @@ class Document(Base):
     __tablename__ = "documents"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
+    )
 
     title: Mapped[str] = mapped_column(String(512), nullable=False)
     author: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)

@@ -1,4 +1,5 @@
 """Highlight model for text selections across documents, episodes, and videos."""
+
 from __future__ import annotations
 
 import uuid
@@ -72,7 +73,9 @@ class Highlight(Base):
     __tablename__ = "highlights"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
+    )
 
     media_type: Mapped[str] = mapped_column(String(20), nullable=False)
     media_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)

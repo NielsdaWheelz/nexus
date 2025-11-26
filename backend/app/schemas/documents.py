@@ -64,3 +64,44 @@ class DocumentSummary(BaseModel):
             }
         }
     }
+
+
+class DocumentUploadResponse(BaseModel):
+    """API response for successful document upload.
+
+    Returns a newly created document placeholder with typed ID format.
+
+    Attributes:
+        id: Typed document ID (format: doc_<uuid>)
+        title: Document title (resolved from explicit override or filename)
+        source_kind: Type of source (pdf, epub, html)
+        created_at: UTC timestamp of upload
+        updated_at: UTC timestamp of creation
+    """
+
+    id: str = Field(description="Typed document ID (doc_<uuid>)")
+    """Typed document ID in format: doc_<uuid>"""
+
+    title: str = Field(description="Document title")
+    """Document title (from explicit override or original filename)"""
+
+    source_kind: Literal["pdf", "epub", "html"] = Field(description="Type of source document")
+    """Source document type: one of pdf, epub, html"""
+
+    created_at: datetime = Field(description="UTC timestamp of upload")
+    """When the document was created (ISO8601 UTC)"""
+
+    updated_at: datetime = Field(description="UTC timestamp of creation")
+    """When the document was updated (ISO8601 UTC)"""
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "id": "doc_11111111-2222-3333-4444-555555555555",
+                "title": "The Myth of Sisyphus",
+                "source_kind": "pdf",
+                "created_at": "2025-01-01T12:00:00Z",
+                "updated_at": "2025-01-01T12:00:00Z",
+            }
+        }
+    }
