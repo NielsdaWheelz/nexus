@@ -5,47 +5,58 @@ This module provides:
 - Test client with authenticated user context
 - JWT token fixtures for authentication testing
 - Proper teardown after each test
+- Test database bootstrap via pytest_sessionstart (auto-creates test DB and runs migrations)
 """
 
-import os
-import time
 from typing import Generator
-from unittest.mock import patch
 
 import pytest
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
 from app.db.base import Base
 from app.db.session import get_session as _get_session
-from app.db.session import _sync_engine, _sync_session_maker
+from app.db.test_bootstrap import ensure_test_database_and_schema
 from app.main import create_app
+
+
+def pytest_sessionstart(session: pytest.Session) -> None:
+    """Pytest hook: Run before any tests.
+
+    Ensures test database exists and is migrated to Alembic head.
+    Fails fast with clear error messages if:
+    - DATABASE_URL_TEST is not set
+    - Postgres is unreachable
+    - Migrations fail
+    """
+    try:
+        ensure_test_database_and_schema()
+    except RuntimeError as e:
+        pytest.exit(f"Test database bootstrap failed: {e}", 1)
 
 
 @pytest.fixture(scope="session")
 def test_db_url() -> str:
-    """Get test database URL.
+    """Get test database URL from config.
 
-    Uses a separate test database to avoid interfering with development DB.
-    Defaults to test_nexus if DATABASE_URL not explicitly set for testing.
+    DATABASE_URL_TEST is required to run DB-backed tests.
+    Must be set via environment variable or .env file before running pytest.
+
+    This fixture assumes ensure_test_database_and_schema() has already run
+    via pytest_sessionstart hook, so the test database is ready.
     """
-    # Allow override via TEST_DATABASE_URL environment variable
-    if os.getenv("TEST_DATABASE_URL"):
-        return os.getenv("TEST_DATABASE_URL")
-
     settings = get_settings()
-    db_url = settings.DATABASE_URL
+    test_db_url = settings.DATABASE_URL_TEST
 
-    # Convert to test database
-    if "postgresql" in db_url:
-        # Change database name to test_nexus
-        if "nexus" in db_url:
-            return db_url.replace("/nexus", "/test_nexus")
-        else:
-            return db_url + "_test"
+    if not test_db_url:
+        raise RuntimeError(
+            "DATABASE_URL_TEST is not set. Set it to a Postgres URL "
+            "(e.g., postgresql+psycopg://app_user:password@localhost:5432/test_nexus) "
+            "before running DB-backed tests."
+        )
 
-    return db_url
+    return test_db_url
 
 
 @pytest.fixture(scope="session")
@@ -85,7 +96,7 @@ def db_session(test_engine) -> Generator[Session, None, None]:
     """
     connection = test_engine.connect()
     transaction = connection.begin()
-    session = sessionmaker(bind=connection)(class_=Session)
+    session = sessionmaker(bind=connection, class_=Session)()
 
     yield session
 
