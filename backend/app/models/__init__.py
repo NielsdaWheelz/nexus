@@ -11,6 +11,7 @@ from app.models.highlight import Highlight
 from app.models.library import Library, LibraryMedia, LibraryMembership, ObjectLibraryVisibility
 from app.models.link import Link
 from app.models.message import Message
+from app.models.reader import Reader
 from app.models.user import User
 
 __all__ = [
@@ -20,6 +21,7 @@ __all__ = [
     "Annotation",
     "Conversation",
     "Message",
+    "Reader",
     "Library",
     "LibraryMembership",
     "LibraryMedia",

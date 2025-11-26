@@ -200,9 +200,7 @@ class TestListDocumentsHappyPath:
         create_test_document(
             db_session, authenticated_user, title="Middle", created_at=now - timedelta(hours=1)
         )
-        create_test_document(
-            db_session, authenticated_user, title="Newest", created_at=now
-        )
+        create_test_document(db_session, authenticated_user, title="Newest", created_at=now)
 
         response = client_authenticated.get("/documents")
 
@@ -380,9 +378,7 @@ class TestListDocumentsStatusFilter:
     ):
         """Test status=ready filter."""
         create_test_document(db_session, authenticated_user, title="Ready Doc", status="ready")
-        create_test_document(
-            db_session, authenticated_user, title="Pending Doc", status="pending"
-        )
+        create_test_document(db_session, authenticated_user, title="Pending Doc", status="pending")
         create_test_document(
             db_session, authenticated_user, title="Processing Doc", status="processing"
         )

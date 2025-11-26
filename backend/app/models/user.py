@@ -73,5 +73,8 @@ class User(Base):
     links: Mapped[list["Link"]] = relationship(
         "Link", back_populates="created_by_user", cascade="all, delete-orphan"
     )
+    readers: Mapped[list["Reader"]] = relationship(
+        "Reader", back_populates="user", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (Index("idx_users_external_user_id", external_user_id),)

@@ -19,12 +19,14 @@ from sqlalchemy.orm import Session
 
 from app.core.auth.deps import rate_limit_authenticated
 from app.core.errors import AppError, ErrorCode, ValidationAppError
-from app.core.ids import to_api_id
+from app.core.ids import from_api_id, to_api_id
 from app.core.pagination import PaginationParams
 from app.db.session import get_session as _get_session
 from app.models.user import User
 from app.schemas.documents import DocumentListItem, DocumentListResponse, DocumentUploadResponse
+from app.schemas.readers import ReaderListResponse, ReaderResponse
 from app.services.documents import create_document_placeholder, list_documents_for_user
+from app.services.readers import list_readers_for_document as list_readers_service
 from app.services.storage import StorageService
 
 logger = logging.getLogger(__name__)
@@ -239,6 +241,106 @@ async def list_documents(
     ]
 
     return DocumentListResponse(
+        items=items,
+        next_cursor=result.next_cursor,
+        has_more=result.has_more,
+    )
+
+
+@router.get(
+    "/{document_id}/readers",
+    response_model=ReaderListResponse,
+    summary="List readers for document",
+    description="List all reading sessions for a document with cursor pagination.",
+)
+def list_document_readers(
+    document_id: str,
+    current_user: Annotated[User, Depends(rate_limit_authenticated)],
+    session: Annotated[Session, Depends(_get_session)],
+    pagination: PaginationParams = Depends(),
+) -> ReaderListResponse:
+    """List readers for a document with pagination.
+
+    Only the document owner can see readers for their document.
+    Returns all readers for a document ordered by creation time (newest first).
+
+    Path Parameters:
+    - document_id: Typed document ID (doc_<uuid>)
+
+    Query Parameters:
+    - cursor: Opaque pagination cursor (None to start from beginning)
+    - limit: Results per page (default 20, max 100)
+
+    Returns typed reader and document IDs.
+
+    Args:
+        document_id: Typed document ID
+        current_user: Authenticated user (must own the document)
+        session: Database session
+        pagination: PaginationParams (cursor, limit)
+
+    Returns:
+        ReaderListResponse with paginated readers
+
+    Raises:
+        ValidationAppError (422): If document_id format invalid
+        NotFoundError (404): If document not found or user doesn't own it
+
+    Example:
+        >>> GET /documents/doc_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/readers
+        >>> {
+        ...     "items": [
+        ...         {
+        ...             "id": "rdr_11111111-2222-3333-4444-555555555555",
+        ...             "document_id": "doc_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        ...             "current_position": 12345,
+        ...             "last_read_at": "2025-01-01T12:00:00Z",
+        ...             "created_at": "2025-01-01T10:00:00Z",
+        ...             "updated_at": "2025-01-01T12:00:00Z"
+        ...         }
+        ...     ],
+        ...     "next_cursor": "...",
+        ...     "has_more": False
+        ... }
+    """
+    # Parse and validate document_id
+    try:
+        doc_type, doc_uuid = from_api_id(document_id)
+    except ValueError as e:
+        raise ValidationAppError(
+            message=f"Invalid document_id format: {str(e)}",
+            details={"field": "document_id", "value": document_id},
+        ) from e
+
+    # Verify document type
+    if doc_type != "document":
+        raise ValidationAppError(
+            message=f"Expected document ID, got {doc_type}",
+            details={"field": "document_id", "expected_type": "document", "got_type": doc_type},
+        )
+
+    # List readers for document (enforces ACL via service)
+    result = list_readers_service(
+        session=session,
+        owner=current_user,
+        document_id=doc_uuid,
+        pagination=pagination,
+    )
+
+    # Convert ReaderInternal objects to ReaderResponse with typed IDs
+    items = [
+        ReaderResponse(
+            id=to_api_id("reader", item.id),
+            document_id=to_api_id("document", item.document_id),
+            current_position=item.current_position,
+            last_read_at=item.last_read_at,
+            created_at=item.created_at,
+            updated_at=item.updated_at,
+        )
+        for item in result.items
+    ]
+
+    return ReaderListResponse(
         items=items,
         next_cursor=result.next_cursor,
         has_more=result.has_more,
