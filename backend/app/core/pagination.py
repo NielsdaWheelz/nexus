@@ -96,7 +96,7 @@ class PaginationParams(BaseModel):
             Validated limit value
 
         Raises:
-            ValidationAppError: If limit < 1 or limit > MAX_PAGE_SIZE
+            ValidationAppError: If limit < 1 or limit > MAX_PAGE_SIZE (422 Unprocessable Entity)
         """
         if v < 1:
             raise ValidationAppError(
@@ -163,7 +163,7 @@ def decode_cursor(cursor: str) -> dict[str, Any]:
     4. Parse JSON
     5. Validate result is dict
 
-    Any failure (invalid base64, invalid JSON, wrong type) raises ValidationAppError.
+    Any failure (invalid base64, invalid JSON, wrong type) raises ValidationAppError with 422.
 
     Args:
         cursor: Opaque base64url-encoded cursor string
@@ -172,7 +172,7 @@ def decode_cursor(cursor: str) -> dict[str, Any]:
         Decoded payload dict (typically keyset)
 
     Raises:
-        ValidationAppError: If cursor is invalid (bad base64, bad JSON, not dict, empty)
+        ValidationAppError: If cursor is invalid (bad base64, bad JSON, not dict, empty) → 422
 
     Example:
         >>> payload = decode_cursor('eyJjcmVhdGVkX2F0IjogIjIwMjUtMDEtMDFUMTI6MDA6MDBaIiwgImlkIjogImRvY18xMjMifQ')
@@ -217,7 +217,7 @@ def decode_cursor(cursor: str) -> dict[str, Any]:
         return payload
 
     except ValidationAppError:
-        # Re-raise validation errors as-is
+        # Re-raise validation errors as-is (already 422)
         raise
     except (ValueError, json.JSONDecodeError) as e:
         # Base64 or JSON decode failed
