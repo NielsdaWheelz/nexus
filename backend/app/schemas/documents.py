@@ -105,3 +105,100 @@ class DocumentUploadResponse(BaseModel):
             }
         }
     }
+
+
+class DocumentListItem(BaseModel):
+    """API response schema for a single document in list endpoint.
+
+    This is the document representation returned by GET /documents.
+    All IDs are typed (doc_<uuid>), timestamps are ISO8601 UTC.
+
+    Attributes:
+        id: Typed document ID (doc_<uuid>)
+        title: Document title
+        source_kind: Type of source (pdf, epub, html)
+        processing_status: Current processing state (pending, processing, ready, failed)
+        created_at: UTC timestamp when document was uploaded
+        updated_at: UTC timestamp of last update
+    """
+
+    id: str = Field(description="Typed document ID (doc_<uuid>)")
+    """Typed document ID in format: doc_<uuid>"""
+
+    title: str | None = Field(description="Document title (may be None)")
+    """Document title, may be None if not yet extracted"""
+
+    source_kind: Literal["pdf", "epub", "html"] = Field(description="Type of source document")
+    """Source document type: one of pdf, epub, html"""
+
+    processing_status: Literal["pending", "processing", "ready", "failed"] = Field(
+        description="Current processing state"
+    )
+    """Processing status: pending, processing, ready, or failed"""
+
+    created_at: datetime = Field(description="UTC timestamp of upload")
+    """When the document was uploaded (ISO8601 UTC)"""
+
+    updated_at: datetime = Field(description="UTC timestamp of last update")
+    """When the document was last updated (ISO8601 UTC)"""
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "id": "doc_11111111-2222-3333-4444-555555555555",
+                "title": "The Myth of Sisyphus",
+                "source_kind": "pdf",
+                "processing_status": "ready",
+                "created_at": "2025-01-01T12:00:00Z",
+                "updated_at": "2025-01-01T12:00:00Z",
+            }
+        }
+    }
+
+
+class DocumentListResponse(BaseModel):
+    """API response for GET /documents (list documents).
+
+    Returns paginated list of user's documents with cursor-based pagination.
+
+    Attributes:
+        items: List of DocumentListItem objects (0 to limit)
+        next_cursor: Opaque cursor for next page, or None if end reached
+        has_more: True if more pages exist, False otherwise
+    """
+
+    items: list[DocumentListItem] = Field(description="List of documents")
+    """Array of documents for current page"""
+
+    next_cursor: str | None = Field(default=None, description="Cursor for next page")
+    """Opaque base64-encoded cursor for next page, or null if no more pages"""
+
+    has_more: bool = Field(description="Whether more pages exist")
+    """True if additional pages available, False if this is last page"""
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "items": [
+                    {
+                        "id": "doc_11111111-2222-3333-4444-555555555555",
+                        "title": "The Myth of Sisyphus",
+                        "source_kind": "pdf",
+                        "processing_status": "ready",
+                        "created_at": "2025-01-01T12:00:00Z",
+                        "updated_at": "2025-01-01T12:00:00Z",
+                    },
+                    {
+                        "id": "doc_22222222-3333-4444-5555-666666666666",
+                        "title": "Crime and Punishment",
+                        "source_kind": "epub",
+                        "processing_status": "ready",
+                        "created_at": "2025-01-02T10:30:00Z",
+                        "updated_at": "2025-01-02T10:32:00Z",
+                    },
+                ],
+                "next_cursor": "eyJjcmVhdGVkX2F0IjogIjIwMjUtMDEtMDJUMTA6MzA6MDBaIiwgImlkIjogIjIyMjIyMjIyLTMzMzMtNDQ0NC01NTU1LTY2NjY2NjY2NjY2NiJ9",
+                "has_more": True,
+            }
+        }
+    }

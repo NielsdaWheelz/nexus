@@ -2,26 +2,29 @@
 
 This module provides:
 - POST /documents: Upload document and create placeholder
+- GET /documents: List user's documents with cursor pagination
 
 All endpoints require authentication via Clerk JWT.
 
 Spec reference:
-- PR 4.1 specification (document upload HTTP layer)
+- PR 3.1 specification (document upload HTTP layer)
+- PR 4.2 specification (document list HTTP layer)
 """
 
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.auth.deps import rate_limit_authenticated
 from app.core.errors import AppError, ErrorCode, ValidationAppError
 from app.core.ids import to_api_id
+from app.core.pagination import PaginationParams
 from app.db.session import get_session as _get_session
 from app.models.user import User
-from app.schemas.documents import DocumentUploadResponse
-from app.services.documents import create_document_placeholder
+from app.schemas.documents import DocumentListItem, DocumentListResponse, DocumentUploadResponse
+from app.services.documents import create_document_placeholder, list_documents_for_user
 from app.services.storage import StorageService
 
 logger = logging.getLogger(__name__)
@@ -148,4 +151,95 @@ async def upload_document(
         source_kind=source_kind,  # type: ignore
         created_at=doc.created_at,
         updated_at=doc.updated_at,
+    )
+
+
+@router.get(
+    "",
+    response_model=DocumentListResponse,
+    status_code=200,
+    summary="List user's documents",
+    description="Retrieve paginated list of authenticated user's documents.",
+)
+async def list_documents(
+    current_user: Annotated[User, Depends(rate_limit_authenticated)],
+    session: Annotated[Session, Depends(_get_session)],
+    pagination: PaginationParams = Depends(),
+    status: str | None = Query(
+        default=None,
+        description="Optional status filter (pending, processing, ready, failed)",
+    ),
+) -> DocumentListResponse:
+    """List user's documents with cursor pagination and optional status filter.
+
+    Retrieves all documents owned by the authenticated user, ordered by
+    creation time (newest first). Supports cursor-based pagination and
+    optional status filtering.
+
+    Query Parameters:
+    - cursor: Opaque pagination cursor (None to start from beginning)
+    - limit: Results per page (default 20, max 100)
+    - status: Optional status filter (pending, processing, ready, failed)
+
+    Returns typed document IDs (doc_<uuid>) and respects all ACL rules.
+    Soft-deleted documents are never returned.
+
+    Args:
+        current_user: Authenticated user (rate limited)
+        session: Database session
+        pagination: PaginationParams (cursor, limit)
+        status: Optional status filter
+
+    Returns:
+        DocumentListResponse with:
+        - items: List of DocumentListItem objects
+        - next_cursor: Cursor for next page or None
+        - has_more: Whether more pages exist
+
+    Raises:
+        ValidationAppError (422): If status is invalid or cursor malformed
+        AppError (401): If user not authenticated
+
+    Example:
+        >>> # GET /documents?limit=20&status=ready
+        >>> {
+        ...     "items": [
+        ...         {
+        ...             "id": "doc_11111111-2222-3333-4444-555555555555",
+        ...             "title": "The Myth of Sisyphus",
+        ...             "source_kind": "pdf",
+        ...             "processing_status": "ready",
+        ...             "created_at": "2025-01-01T12:00:00Z",
+        ...             "updated_at": "2025-01-01T12:00:00Z"
+        ...         }
+        ...     ],
+        ...     "next_cursor": null,
+        ...     "has_more": false
+        ... }
+    """
+    # Call service layer with optional status filter
+    result = list_documents_for_user(
+        session=session,
+        user=current_user,
+        pagination=pagination,
+        status_filter=status,
+    )
+
+    # Convert DocumentSummary objects to DocumentListItem with typed IDs
+    items = [
+        DocumentListItem(
+            id=to_api_id("document", item.id),
+            title=item.title,
+            source_kind=item.source_kind,
+            processing_status=item.processing_status,  # type: ignore  # str to Literal
+            created_at=item.created_at,
+            updated_at=item.updated_at,
+        )
+        for item in result.items
+    ]
+
+    return DocumentListResponse(
+        items=items,
+        next_cursor=result.next_cursor,
+        has_more=result.has_more,
     )

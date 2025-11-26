@@ -248,8 +248,9 @@ def list_documents_for_user(
     session: Session,
     user: User,
     pagination: PaginationParams,
+    status_filter: str | None = None,
 ) -> PaginatedResponse[DocumentSummary]:
-    """List all documents owned by user with cursor pagination.
+    """List all documents owned by user with cursor pagination and optional status filter.
 
     This function returns documents in deterministic order:
     ORDER BY created_at DESC, id DESC (newest first)
@@ -262,11 +263,13 @@ def list_documents_for_user(
     Filters:
     - Only documents owned by user (user_id == user.id)
     - Excludes soft-deleted documents (deleted_at IS NULL)
+    - Optional status filter (pending, processing, ready, failed)
 
     Args:
         session: SQLAlchemy database session
         user: Authenticated user
         pagination: PaginationParams with limit and optional cursor
+        status_filter: Optional status filter (pending, processing, ready, failed)
 
     Returns:
         PaginatedResponse[DocumentSummary] with:
@@ -275,19 +278,29 @@ def list_documents_for_user(
         - has_more: True if more pages exist, False otherwise
 
     Raises:
-        ValidationAppError: If cursor is invalid
+        ValidationAppError: If cursor is invalid or status_filter is invalid
 
     Example:
         >>> pagination = PaginationParams(limit=20, cursor=None)
         >>> result = list_documents_for_user(
         ...     session=db,
         ...     user=current_user,
-        ...     pagination=pagination
+        ...     pagination=pagination,
+        ...     status_filter="ready"
         ... )
         >>> print(f"Got {len(result.items)} documents")
         >>> if result.has_more:
         ...     next_pagination = PaginationParams(limit=20, cursor=result.next_cursor)
     """
+    # Validate status_filter if provided
+    if status_filter is not None:
+        valid_statuses = {"pending", "processing", "ready", "failed"}
+        if status_filter not in valid_statuses:
+            raise ValidationAppError(
+                message=f"status must be one of: {', '.join(sorted(valid_statuses))}",
+                details={"field": "status", "value": status_filter},
+            )
+
     # Decode cursor to get keyset values
     last_created_at, last_id = _decode_pagination_cursor(pagination.cursor)
 
@@ -298,6 +311,10 @@ def list_documents_for_user(
             Document.deleted_at.is_(None),
         )
     )
+
+    # Apply status filter if provided
+    if status_filter is not None:
+        query = query.filter(Document.status == status_filter)
 
     # Apply cursor filtering (keyset pagination)
     if last_created_at is not None and last_id is not None:
