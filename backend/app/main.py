@@ -6,7 +6,7 @@ from typing import Awaitable, Callable
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import health
+from app.api.routes import auth, health
 from app.core.config import get_settings
 from app.core.error_handlers import register_error_handlers
 from app.core.logging import configure_logging, get_logger
@@ -78,6 +78,7 @@ def create_app() -> FastAPI:
 
     # Include routers
     app.include_router(health.router)
+    app.include_router(auth.router)
 
     return app
 

@@ -86,6 +86,7 @@ class Settings(BaseSettings):
         default="", description="Clerk JWKS endpoint URL for JWT validation"
     )
     CLERK_ISSUER: str = Field(default="", description="Clerk token issuer URL")
+    CLERK_AUDIENCE: str = Field(default="", description="Clerk application ID (audience claim)")
 
     # ========================================================================
     # LLM Provider Credentials (SENSITIVE - .env only)

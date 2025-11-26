@@ -240,6 +240,7 @@ def upgrade() -> None:
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.CheckConstraint("media_type IN ('document', 'episode', 'video')", name='ck_library_media_type'),
         sa.ForeignKeyConstraint(['library_id'], ['libraries.id'], ondelete='CASCADE'),
+        sa.ForeignKeyConstraint(['added_by_user_id'], ['users.id'], ondelete='CASCADE'),
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('library_id', 'media_type', 'media_id', name='uq_library_media_library_media'),
     )
@@ -257,6 +258,7 @@ def upgrade() -> None:
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.CheckConstraint("object_type IN ('highlight', 'annotation', 'conversation', 'message')", name='ck_object_visibility_type'),
         sa.ForeignKeyConstraint(['library_id'], ['libraries.id'], ondelete='CASCADE'),
+        sa.ForeignKeyConstraint(['shared_by_user_id'], ['users.id'], ondelete='CASCADE'),
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('object_type', 'object_id', 'library_id', name='uq_object_visibility_object_library'),
     )
