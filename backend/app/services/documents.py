@@ -25,6 +25,7 @@ from sqlalchemy import and_, desc
 from sqlalchemy.orm import Session
 
 from app.core.errors import NotFoundError, ValidationAppError
+from app.core.ids import to_api_id
 from app.core.pagination import PaginatedResponse, PaginationParams, decode_cursor, encode_cursor
 from app.models.document import Document
 from app.models.user import User
@@ -188,7 +189,10 @@ def get_document_for_user(
         # Generic error: don't leak whether document exists or ownership status
         raise NotFoundError(
             message="Document not found",
-            details={"resource_type": "document", "resource_id": str(document_id)},
+            details={
+                "resource_type": "document",
+                "resource_id": to_api_id("document", document_id),
+            },
         )
 
     return doc
