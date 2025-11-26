@@ -25,7 +25,6 @@ from sqlalchemy import and_, desc
 from sqlalchemy.orm import Session
 
 from app.core.errors import NotFoundError, ValidationAppError
-from app.core.ids import to_api_id
 from app.core.pagination import PaginatedResponse, PaginationParams, decode_cursor, encode_cursor
 from app.models.document import Document
 from app.models.user import User
@@ -187,10 +186,9 @@ def get_document_for_user(
 
     if not doc:
         # Generic error: don't leak whether document exists or ownership status
-        typed_id = to_api_id("document", document_id)
         raise NotFoundError(
             message="Document not found",
-            details={"resource_type": "document", "resource_id": typed_id},
+            details={"resource_type": "document", "resource_id": str(document_id)},
         )
 
     return doc
@@ -336,10 +334,10 @@ def list_documents_for_user(
             }
         )
 
-    # Convert to summaries with typed IDs
+    # Convert to summaries (with raw UUIDs; API layer converts to typed IDs)
     items = [
         DocumentSummary(
-            id=to_api_id("document", doc.id),
+            id=doc.id,
             title=doc.title,
             source_kind=_mime_to_source_kind(doc.original_mime_type),
             processing_status=doc.status,

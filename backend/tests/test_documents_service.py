@@ -11,13 +11,12 @@ All tests use real database transactions (no mocks) with auto-rollback.
 """
 
 from datetime import datetime, timezone
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy.orm import Session
 
 from app.core.errors import NotFoundError, ValidationAppError
-from app.core.ids import from_api_id, to_api_id
 from app.core.pagination import PaginationParams
 from app.models.document import Document
 from app.models.user import User
@@ -355,7 +354,7 @@ class TestListDocumentsForUser:
         )
 
         assert len(result.items) == 1
-        assert result.items[0].id == to_api_id("document", doc.id)
+        assert result.items[0].id == doc.id
         assert result.has_more is False
         assert result.next_cursor is None
 
@@ -569,7 +568,7 @@ class TestListDocumentsForUser:
         )
 
         assert len(result.items) == 2
-        returned_ids = [from_api_id(item.id)[1] for item in result.items]
+        returned_ids = [item.id for item in result.items]
         assert docs[1].id not in returned_ids
 
     def test_list_other_user_documents_excluded(
@@ -622,15 +621,15 @@ class TestListDocumentsForUser:
 
 
 # ============================================================================
-# TYPED ID TESTS
+# UUID FORMAT TESTS
 # ============================================================================
 
 
-class TestTypedIds:
-    """Test typed ID format in responses."""
+class TestUUIDFormat:
+    """Test that service layer returns raw UUIDs (typed ID conversion at API layer)."""
 
-    def test_get_document_returns_typed_id(self, db_session: Session, user1: User):
-        """Test that single document endpoint returns typed ID."""
+    def test_get_document_returns_raw_uuid(self, db_session: Session, user1: User):
+        """Test that service returns raw UUID (not typed ID)."""
         doc = create_document_placeholder(
             session=db_session,
             user=user1,
@@ -649,11 +648,12 @@ class TestTypedIds:
             document_id=doc.id,
         )
 
-        # Model returns raw UUID, but if exposed via API it would use typed ID
+        # Service returns raw UUID (not typed ID string)
         assert retrieved.id == doc.id
+        assert isinstance(retrieved.id, UUID)
 
-    def test_list_documents_returns_typed_ids(self, db_session: Session, user1: User):
-        """Test that list endpoint returns typed IDs."""
+    def test_list_documents_returns_raw_uuids(self, db_session: Session, user1: User):
+        """Test that list service returns raw UUIDs (API layer handles typed ID conversion)."""
         doc = create_document_placeholder(
             session=db_session,
             user=user1,
@@ -673,12 +673,8 @@ class TestTypedIds:
         )
 
         assert len(result.items) == 1
-        typed_id = result.items[0].id
+        item_id = result.items[0].id
 
-        # Verify format
-        assert typed_id.startswith("doc_")
-
-        # Verify round-trip
-        obj_type, uuid = from_api_id(typed_id)
-        assert obj_type == "document"
-        assert uuid == doc.id
+        # Service returns raw UUID, not typed ID string
+        assert isinstance(item_id, UUID)
+        assert item_id == doc.id
