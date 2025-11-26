@@ -69,7 +69,13 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str = Field(
         default="postgresql+psycopg://app_user:password@localhost:5432/nexus",
-        description="PostgreSQL connection URL",
+        description="PostgreSQL connection URL for development/production",
+    )
+    DATABASE_URL_TEST: str | None = Field(
+        default=None,
+        description="PostgreSQL test database URL. Required to run DB-backed tests. "
+        "Set to a separate test database (e.g., test_nexus). "
+        "If unset, DB-backed tests will fail with a clear error.",
     )
 
     # ========================================================================

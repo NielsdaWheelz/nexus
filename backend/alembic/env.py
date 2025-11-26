@@ -93,13 +93,19 @@ def run_migrations_online() -> None:
     """Run migrations in 'online' mode (sync).
 
     Uses synchronous SQLAlchemy engine for migrations.
+    Supports DATABASE_URL_TEST for test database migrations.
     """
+    import os
     from sqlalchemy import create_engine
     from app.core.config import get_settings
 
     settings = get_settings()
+
+    # Support DATABASE_URL_TEST for test database bootstrap
+    # This allows pytest test bootstrap to run migrations against test_nexus
+    db_url = os.environ.get("DATABASE_URL_TEST") or settings.DATABASE_URL
+
     # Convert async URL to sync for migrations
-    db_url = settings.DATABASE_URL
     if db_url.startswith("postgresql+asyncpg"):
         db_url = db_url.replace("postgresql+asyncpg", "postgresql+psycopg")
 
