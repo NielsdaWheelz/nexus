@@ -198,7 +198,7 @@ class TestCreateDocumentPlaceholder:
         fetched = db_session.query(Document).filter(Document.id == doc_id).first()
         assert fetched is not None
         assert fetched.user_id == user1.id
-        assert fetched.original_filename == "page.html"
+        assert fetched.title == "page.html"  # original_filename is used as title
 
 
 # ============================================================================
@@ -382,7 +382,9 @@ class TestListDocumentsForUser:
         summary = result.items[0]
 
         # Verify DocumentSummary fields
-        assert summary.id.startswith("doc_")
+        # Note: Service layer returns raw UUIDs (not typed IDs)
+        # Typed ID conversion happens at API boundary
+        assert isinstance(summary.id, UUID)
         assert summary.title == "book.epub"
         assert summary.source_kind == "epub"
         assert summary.processing_status == "pending"
