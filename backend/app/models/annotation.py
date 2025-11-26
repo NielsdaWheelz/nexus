@@ -1,4 +1,5 @@
 """Annotation model for user notes attached to highlights."""
+from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone

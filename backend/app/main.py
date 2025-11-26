@@ -6,17 +6,24 @@ from typing import Awaitable, Callable
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import auth, health
-from app.core.config import get_settings
+from app.api.routes import auth, health, test_routes
+from app.core.config import Environment, get_settings
 from app.core.error_handlers import register_error_handlers
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import request_logging_middleware
+from app.core.security_headers import security_headers_middleware
 
 logger = get_logger(__name__)
 
 
 def create_app() -> FastAPI:
     """Create and configure FastAPI application.
+
+    Middleware order:
+    1. CORS (must be first, per FastAPI documentation)
+    2. Trace ID (generates request IDs)
+    3. Request logging (logs with trace ID)
+    4. Security headers (adds security headers to responses)
 
     Returns:
         Configured FastAPI instance.
@@ -31,13 +38,13 @@ def create_app() -> FastAPI:
         version="0.1.0",
     )
 
-    # Add CORS middleware (must be first)
+    # Add CORS middleware (must be first per FastAPI docs)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.get_cors_origins(),
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_credentials=False,  # Bearer tokens, not cookies
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
     )
 
     # Add trace ID middleware (must be before request logging)
@@ -72,6 +79,15 @@ def create_app() -> FastAPI:
         """Request logging middleware wrapper."""
         return await request_logging_middleware(request, call_next)
 
+    # Add security headers middleware (must be after other middleware)
+    # This ensures all responses (success, error, health) include security headers
+    @app.middleware("http")
+    async def headers_middleware(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        """Security headers middleware wrapper."""
+        return await security_headers_middleware(request, call_next)
+
     # Register global exception handlers
     # These must be registered after middleware to catch all exceptions
     register_error_handlers(app)
@@ -79,6 +95,14 @@ def create_app() -> FastAPI:
     # Include routers
     app.include_router(health.router)
     app.include_router(auth.router)
+
+    # Include test-only routers (development and testing only)
+    if settings.ENV in (Environment.DEVELOPMENT, Environment.STAGING):
+        app.include_router(
+            test_routes.router,
+            tags=["test"],
+        )
+        logger.info("Test routes mounted (development/staging environment)")
 
     return app
 

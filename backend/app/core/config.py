@@ -183,6 +183,23 @@ class Settings(BaseSettings):
     )
 
     # ========================================================================
+    # Rate Limiting
+    # ========================================================================
+
+    RATE_LIMIT_ENABLED: bool = Field(
+        default=True,
+        description="Enable rate limiting on all endpoints",
+    )
+    RATE_LIMIT_AUTHENTICATED_REQUESTS_PER_MINUTE: int = Field(
+        default=60,
+        description="Max requests per minute for authenticated users (GLOBAL_USER scope)",
+    )
+    RATE_LIMIT_ANONYMOUS_REQUESTS_PER_MINUTE: int = Field(
+        default=30,
+        description="Max requests per minute for anonymous clients (GLOBAL_ANON scope)",
+    )
+
+    # ========================================================================
     # Computed Properties
     # ========================================================================
 

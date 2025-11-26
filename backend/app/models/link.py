@@ -1,4 +1,5 @@
 """Link model for symmetric, untyped relationships between objects."""
+from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
