@@ -494,9 +494,7 @@ class TestListDocumentReaders:
         db_session.flush()
 
         # Create 5 readers (one per user for the same document)
-        readers = [
-            Reader(user_id=user.id, document_id=test_document.id) for user in users
-        ]
+        readers = [Reader(user_id=user.id, document_id=test_document.id) for user in users]
         db_session.add_all(readers)
         db_session.flush()
 

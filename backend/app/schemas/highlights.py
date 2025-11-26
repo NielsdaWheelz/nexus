@@ -16,7 +16,7 @@ from datetime import datetime
 from typing import Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class HighlightSummary(BaseModel):
@@ -187,3 +187,69 @@ class AnnotationDetail(AnnotationSummary):
     """
 
     pass
+
+
+# ============================================================================
+# API LAYER SCHEMAS
+# ============================================================================
+
+
+class CreateHighlightRequest(BaseModel):
+    """Request body for POST /highlights.
+
+    Accepts a simple byte-range anchor (text_start, text_end) which will be
+    validated and mapped to the richer internal anchor format by the route handler.
+
+    Attributes:
+        document_id: Typed document ID (doc_<uuid>)
+        byte_start: Byte offset start in canonical_text (>= 0)
+        byte_end: Byte offset end in canonical_text (> byte_start)
+    """
+
+    document_id: str = Field(description="Typed document ID (doc_<uuid>)")
+    byte_start: int = Field(ge=0, description="Byte offset start (>= 0)")
+    byte_end: int = Field(gt=0, description="Byte offset end (> byte_start)")
+
+    @field_validator("byte_end")
+    @classmethod
+    def validate_byte_range(cls, v: int, info) -> int:
+        """Ensure byte_end > byte_start."""
+        if "byte_start" in info.data and v <= info.data["byte_start"]:
+            raise ValueError("byte_end must be greater than byte_start")
+        return v
+
+
+class HighlightItem(BaseModel):
+    """API response item for a single highlight (used in list responses).
+
+    All IDs are typed (e.g., hl_<uuid>, doc_<uuid>).
+
+    Attributes:
+        id: Typed highlight ID (hl_<uuid>)
+        document_id: Typed document ID (doc_<uuid>)
+        byte_start: Byte offset start in canonical_text
+        byte_end: Byte offset end in canonical_text
+        created_at: UTC timestamp of creation
+        updated_at: UTC timestamp of last update
+    """
+
+    id: str = Field(description="Typed highlight ID (hl_<uuid>)")
+    document_id: str = Field(description="Typed document ID (doc_<uuid>)")
+    byte_start: int = Field(description="Byte offset start")
+    byte_end: int = Field(description="Byte offset end")
+    created_at: datetime = Field(description="UTC timestamp of creation")
+    updated_at: Optional[datetime] = Field(default=None, description="UTC timestamp of last update")
+
+
+class HighlightListResponse(BaseModel):
+    """API response for list highlights endpoints (with pagination).
+
+    Attributes:
+        items: List of HighlightItem objects
+        next_cursor: Opaque cursor for next page, or null if at end
+        has_more: True if more pages exist, False otherwise
+    """
+
+    items: list[HighlightItem] = Field(description="List of highlights")
+    next_cursor: Optional[str] = Field(default=None, description="Cursor for next page")
+    has_more: bool = Field(description="Whether more items exist")
