@@ -7,19 +7,20 @@ Further service/DAO wiring will be added in later PRs.
 from typing import Optional
 
 from sqlalchemy import create_engine
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.engine import Engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
 
 # Lazy-loaded engine instances (created on first use)
-_sync_engine: Optional[object] = None
-_async_engine: Optional[object] = None
+_sync_engine: Optional[Engine] = None
+_async_engine: Optional[AsyncEngine] = None
 _sync_session_maker: Optional[sessionmaker[Session]] = None
 _async_session_maker: Optional[sessionmaker[AsyncSession]] = None
 
 
-def get_sync_engine() -> object:
+def get_sync_engine() -> Engine:
     """Get or create synchronous SQLAlchemy engine.
 
     Returns:
@@ -46,7 +47,7 @@ def get_sync_engine() -> object:
     return _sync_engine
 
 
-def get_async_engine() -> object:
+def get_async_engine() -> AsyncEngine:
     """Get or create asynchronous SQLAlchemy engine.
 
     Returns:

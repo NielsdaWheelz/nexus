@@ -3,11 +3,14 @@
 This module provides:
 - Database session fixtures with transaction rollback (test isolation)
 - Test client with authenticated user context
+- JWT token fixtures for authentication testing
 - Proper teardown after each test
 """
 
 import os
+import time
 from typing import Generator
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy import create_engine, event
@@ -118,3 +121,28 @@ def client(app):
     from fastapi.testclient import TestClient
 
     return TestClient(app)
+
+
+# ============================================================================
+# JWT FIXTURES FOR AUTHENTICATION TESTING
+# ============================================================================
+
+
+@pytest.fixture
+def auth_token():
+    """Provide a valid JWT token for testing authenticated endpoints.
+
+    Token is for user_test_1.
+    Note: Actual JWT verification is mocked in tests that need it.
+    """
+    return "mock.jwt.token.user1"
+
+
+@pytest.fixture
+def auth_token2():
+    """Provide a second valid JWT token for testing (different user).
+
+    Token is for user_test_2.
+    Note: Actual JWT verification is mocked in tests that need it.
+    """
+    return "mock.jwt.token.user2"

@@ -1,4 +1,5 @@
 """Highlight model for text selections across documents, episodes, and videos."""
+from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone

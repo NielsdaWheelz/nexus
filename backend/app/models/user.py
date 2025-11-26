@@ -1,5 +1,7 @@
 """User model for Clerk-authenticated users."""
 
+from __future__ import annotations
+
 import uuid
 from datetime import datetime, timezone
 

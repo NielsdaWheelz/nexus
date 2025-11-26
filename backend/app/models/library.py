@@ -1,4 +1,5 @@
 """Library models for shared collections and visibility management."""
+from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone

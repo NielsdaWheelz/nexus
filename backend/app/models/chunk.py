@@ -8,6 +8,7 @@ Per spec/schemas/chunks.md, there are three types of chunks:
 NOTE: Vector embeddings (pgvector) are added in PR 6.1 Embeddings Pipeline.
 This PR creates the table structure; embeddings column added later via migration.
 """
+from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
