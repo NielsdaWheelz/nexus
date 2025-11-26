@@ -1000,6 +1000,11 @@ Implement embedding generation for chunks, vector storage (pgvector), and BM25 f
 PR 3.2 (chunks).
 
 **Deliverables:**
+- pgvector / embedding column
+  - add pgvector extension
+  - add embedding columns via migration
+  - update ORM models to include those columns
+  - add tests to prove round-trip works
 - Embedding generation:
   - OpenAI embeddings API (or Anthropic, or local model via sentence-transformers)
   - Deterministic (same text → same embedding)
