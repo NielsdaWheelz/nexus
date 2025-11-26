@@ -17,6 +17,7 @@ from sqlalchemy import (
     BigInteger,
     CheckConstraint,
     DateTime,
+    ForeignKey,
     Index,
     String,
     Text,
@@ -113,7 +114,7 @@ class ThoughtChunk(Base):
 
     object_type: Mapped[str] = mapped_column(String(30), nullable=False)
     object_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
 
     chunk_version: Mapped[str] = mapped_column(String(50), nullable=False)
     embedding_model: Mapped[str] = mapped_column(String(100), nullable=False)
