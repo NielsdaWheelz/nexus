@@ -173,20 +173,24 @@ class NotFoundError(AppError):
 
 
 class ValidationAppError(AppError):
-    """Validation error (400 Bad Request or 422 Unprocessable Entity)."""
+    """Validation error (422 Unprocessable Entity).
+
+    All semantic input validation failures return 422, per RFC 4918.
+    This includes field-level validation, format validation, constraint violations, etc.
+    """
 
     def __init__(
         self,
         message: str = "Validation failed",
         details: dict[str, Any] | None = None,
-        http_status: int = 400,
+        http_status: int = 422,
     ):
         """Initialize ValidationAppError with validation error code.
 
         Args:
             message: Human-readable error message
             details: Optional structured error details
-            http_status: HTTP status code (400 or 422, default 400)
+            http_status: HTTP status code (default 422 per RFC 4918)
         """
         super().__init__(
             code=ErrorCode.VALIDATION_ERROR,

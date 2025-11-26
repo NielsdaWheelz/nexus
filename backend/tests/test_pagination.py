@@ -104,12 +104,12 @@ class TestInvalidCursors:
     """Verify invalid cursors are rejected with VALIDATION_ERROR."""
 
     def test_invalid_base64_rejected(self):
-        """Invalid base64 raises ValidationAppError."""
+        """Invalid base64 raises ValidationAppError (422)."""
         with pytest.raises(ValidationAppError) as exc_info:
             decode_cursor("!!!invalid_base64!!!")
 
         assert exc_info.value.code == ErrorCode.VALIDATION_ERROR
-        assert exc_info.value.http_status == 400
+        assert exc_info.value.http_status == 422
 
     def test_empty_cursor_rejected(self):
         """Empty cursor raises ValidationAppError."""
@@ -328,7 +328,7 @@ def test_pagination_params_dependency_fastapi():
             try:
                 decode_cursor(params.cursor)
             except ValidationAppError as e:
-                raise HTTPException(status_code=400, detail=str(e.message)) from e
+                raise HTTPException(status_code=e.http_status, detail=str(e.message)) from e
 
         return {"limit": params.limit, "cursor": params.cursor}
 
@@ -372,7 +372,7 @@ def test_invalid_cursor_with_fastapi():
 
     # Test: invalid cursor is detected
     response = client.get("/test-pagination?cursor=!!!invalid!!!")
-    assert response.status_code == 400
+    assert response.status_code == 422
 
 
 def test_cursor_decode_in_handler():
