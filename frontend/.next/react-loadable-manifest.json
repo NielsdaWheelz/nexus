@@ -1,1 +1,12 @@
-{}
+{
+  "node_modules/.pnpm/@clerk+nextjs@6.35.5_next@14.2.33_@babel+core@7.28.5_react-dom@18.3.1_react@18.3.1__rea_44239289a1b45b29acafd28c70b99279/node_modules/@clerk/nextjs/dist/esm/app-router/client/ClerkProvider.js -> ./keyless-creator-reader.js": {
+    "id": "node_modules/.pnpm/@clerk+nextjs@6.35.5_next@14.2.33_@babel+core@7.28.5_react-dom@18.3.1_react@18.3.1__rea_44239289a1b45b29acafd28c70b99279/node_modules/@clerk/nextjs/dist/esm/app-router/client/ClerkProvider.js -> ./keyless-creator-reader.js",
+    "files": [
+      "static/chunks/_app-pages-browser_node_modules_pnpm_clerk_nextjs_6_35_5_next_14_2_33__babel_core_7_28_5_reac-857256.js"
+    ]
+  },
+  "node_modules/.pnpm/@clerk+nextjs@6.35.5_next@14.2.33_@babel+core@7.28.5_react-dom@18.3.1_react@18.3.1__rea_44239289a1b45b29acafd28c70b99279/node_modules/@clerk/nextjs/dist/esm/app-router/client/keyless-cookie-sync.js -> ../keyless-actions.js": {
+    "id": "node_modules/.pnpm/@clerk+nextjs@6.35.5_next@14.2.33_@babel+core@7.28.5_react-dom@18.3.1_react@18.3.1__rea_44239289a1b45b29acafd28c70b99279/node_modules/@clerk/nextjs/dist/esm/app-router/client/keyless-cookie-sync.js -> ../keyless-actions.js",
+    "files": []
+  }
+}
