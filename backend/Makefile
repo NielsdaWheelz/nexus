@@ -1,9 +1,10 @@
-.PHONY: help install test lint format type-check clean
+.PHONY: help install dev test lint format type-check clean
 
 help:
 	@echo "Backend Makefile"
 	@echo ""
 	@echo "  make install      Install dependencies with uv"
+	@echo "  make dev          Start development server (uvicorn with reload)"
 	@echo "  make test         Run tests (pytest)"
 	@echo "  make lint         Run linters (ruff check + black check + mypy)"
 	@echo "  make format       Auto-format code (black + ruff fix)"
@@ -18,6 +19,10 @@ install:
 	@echo "Installing dependencies..."
 	$(UV) sync --all-extras
 	@echo "✓ Dependencies installed"
+
+dev: install
+	@echo "Starting development server..."
+	$(PYTHON) -m uvicorn app.main:app --reload
 
 test: install
 	@echo "Running tests..."
