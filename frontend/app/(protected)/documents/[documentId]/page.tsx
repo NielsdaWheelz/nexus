@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useApiRequest } from "@/lib/api-client";
-import { DocumentListItem } from "@/lib/api/documents";
+import { DocumentsService } from "@/lib/generated-api";
+import type { DocumentListItem } from "@/lib/generated-api";
 
 export default function DocumentDetailPage({ params }: { params: { documentId: string } }) {
-  const { apiGet } = useApiRequest();
   const [document, setDocument] = useState<DocumentListItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -15,7 +14,8 @@ export default function DocumentDetailPage({ params }: { params: { documentId: s
     const fetchDocument = async () => {
       try {
         const docId = params.documentId;
-        const response = await apiGet<DocumentListItem>(`/documents/${docId}`);
+        const response: DocumentListItem =
+          await DocumentsService.getDocumentDocumentsDocumentIdGet(docId);
         setDocument(response);
         setError(null);
       } catch (err) {
@@ -30,8 +30,8 @@ export default function DocumentDetailPage({ params }: { params: { documentId: s
       }
     };
 
-    fetchDocument();
-  }, [params.documentId, apiGet]);
+    void fetchDocument();
+  }, [params.documentId]);
 
   if (loading) {
     return (

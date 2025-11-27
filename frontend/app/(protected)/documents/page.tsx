@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useApiRequest } from "@/lib/api-client";
-import { DocumentListItem, DocumentListResponse, buildDocumentsQuery } from "@/lib/api/documents";
+import { DocumentsService } from "@/lib/generated-api";
+import type { DocumentListItem, DocumentListResponse } from "@/lib/generated-api";
 
 export default function DocumentsPage() {
-  const { apiGet } = useApiRequest();
   const [documents, setDocuments] = useState<DocumentListItem[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -16,8 +15,11 @@ export default function DocumentsPage() {
 
   const fetchDocuments = async (cursor?: string | null) => {
     try {
-      const endpoint = buildDocumentsQuery(cursor);
-      const response = await apiGet<DocumentListResponse>(endpoint);
+      const response: DocumentListResponse = await DocumentsService.listDocumentsDocumentsGet(
+        undefined, // status (optional, not filtering by status)
+        20, // limit
+        cursor ?? undefined // cursor
+      );
 
       if (cursor) {
         // Append to existing documents for pagination
@@ -27,7 +29,7 @@ export default function DocumentsPage() {
         setDocuments(response.items);
       }
 
-      setNextCursor(response.next_cursor);
+      setNextCursor(response.next_cursor ?? null);
       setHasMore(response.has_more);
       setError(null);
     } catch (err) {
@@ -39,9 +41,8 @@ export default function DocumentsPage() {
   };
 
   useEffect(() => {
-    fetchDocuments();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiGet]);
+    void fetchDocuments();
+  }, []);
 
   const handleLoadMore = async () => {
     if (!nextCursor || loadingMore) return;
@@ -54,7 +55,7 @@ export default function DocumentsPage() {
     setError(null);
     setDocuments([]);
     setNextCursor(null);
-    fetchDocuments();
+    void fetchDocuments();
   };
 
   if (loading && documents.length === 0) {
@@ -112,7 +113,6 @@ export default function DocumentsPage() {
                 key={doc.id}
                 className="hover:bg-gray-50 cursor-pointer transition-colors"
                 onClick={() => {
-                  // Navigate to document detail
                   window.location.href = `/app/documents/${doc.id}`;
                 }}
               >
