@@ -1,7 +1,13 @@
+"use client";
+
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
+import { useConfigureOpenApiClient } from "@/lib/api/client";
 
 export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
+  // Configure the OpenAPI client with Clerk auth token once when layout mounts
+  useConfigureOpenApiClient();
+
   return (
     <div className="min-h-screen bg-gray-50">
       <nav className="bg-white border-b border-gray-200">

@@ -1,16 +1,21 @@
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
-import { useApiRequest } from "@/lib/api-client";
-import { DocumentListResponse } from "@/lib/api/documents";
+import { vi } from "vitest";
+import { DocumentsService } from "@/lib/generated-api";
+import type { DocumentListResponse } from "@/lib/generated-api";
 import DocumentsPage from "../page";
 
-// Mock the useApiRequest hook
-jest.mock("@/lib/api-client", () => ({
-  useApiRequest: jest.fn(),
+// Mock the generated API
+vi.mock("@/lib/generated-api", () => ({
+  DocumentsService: {
+    listDocumentsDocumentsGet: vi.fn(),
+  },
 }));
 
 // Mock next/link
-jest.mock("next/link", () => {
-  return ({ children, href }: any) => children;
+vi.mock("next/link", () => {
+  return {
+    default: ({ children, href }: any) => children,
+  };
 });
 
 // Mock the window.location.href
@@ -42,17 +47,13 @@ const mockDocuments: DocumentListResponse = {
 
 describe("DocumentsPage", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   test("renders loading state initially", async () => {
-    const mockApiGet = jest.fn(
+    (DocumentsService.listDocumentsDocumentsGet as any).mockImplementation(
       () => new Promise((resolve) => setTimeout(() => resolve(mockDocuments), 100))
     );
-
-    (useApiRequest as jest.Mock).mockReturnValue({
-      apiGet: mockApiGet,
-    });
 
     render(<DocumentsPage />);
 
@@ -60,11 +61,7 @@ describe("DocumentsPage", () => {
   });
 
   test("renders documents list on successful fetch", async () => {
-    const mockApiGet = jest.fn().mockResolvedValue(mockDocuments);
-
-    (useApiRequest as jest.Mock).mockReturnValue({
-      apiGet: mockApiGet,
-    });
+    (DocumentsService.listDocumentsDocumentsGet as any).mockResolvedValue(mockDocuments);
 
     render(<DocumentsPage />);
 
@@ -76,11 +73,7 @@ describe("DocumentsPage", () => {
   });
 
   test("displays document metadata correctly", async () => {
-    const mockApiGet = jest.fn().mockResolvedValue(mockDocuments);
-
-    (useApiRequest as jest.Mock).mockReturnValue({
-      apiGet: mockApiGet,
-    });
+    (DocumentsService.listDocumentsDocumentsGet as any).mockResolvedValue(mockDocuments);
 
     render(<DocumentsPage />);
 
@@ -92,14 +85,10 @@ describe("DocumentsPage", () => {
   });
 
   test("renders empty state when no documents", async () => {
-    const mockApiGet = jest.fn().mockResolvedValue({
+    (DocumentsService.listDocumentsDocumentsGet as any).mockResolvedValue({
       items: [],
       next_cursor: null,
       has_more: false,
-    });
-
-    (useApiRequest as jest.Mock).mockReturnValue({
-      apiGet: mockApiGet,
     });
 
     render(<DocumentsPage />);
@@ -110,11 +99,9 @@ describe("DocumentsPage", () => {
   });
 
   test("renders error state on API failure", async () => {
-    const mockApiGet = jest.fn().mockRejectedValue(new Error("API error: 500"));
-
-    (useApiRequest as jest.Mock).mockReturnValue({
-      apiGet: mockApiGet,
-    });
+    (DocumentsService.listDocumentsDocumentsGet as any).mockRejectedValue(
+      new Error("API error: 500")
+    );
 
     render(<DocumentsPage />);
 
@@ -126,14 +113,9 @@ describe("DocumentsPage", () => {
   });
 
   test("retry button refetches documents", async () => {
-    const mockApiGet = jest
-      .fn()
+    (DocumentsService.listDocumentsDocumentsGet as any)
       .mockRejectedValueOnce(new Error("API error"))
       .mockResolvedValueOnce(mockDocuments);
-
-    (useApiRequest as jest.Mock).mockReturnValue({
-      apiGet: mockApiGet,
-    });
 
     render(<DocumentsPage />);
 
@@ -150,14 +132,10 @@ describe("DocumentsPage", () => {
   });
 
   test("renders pagination button when has_more is true", async () => {
-    const mockApiGet = jest.fn().mockResolvedValue({
+    (DocumentsService.listDocumentsDocumentsGet as any).mockResolvedValue({
       items: mockDocuments.items,
       next_cursor: "next_page_cursor",
       has_more: true,
-    });
-
-    (useApiRequest as jest.Mock).mockReturnValue({
-      apiGet: mockApiGet,
     });
 
     render(<DocumentsPage />);

@@ -1,16 +1,21 @@
 import { render, screen, waitFor } from "@testing-library/react";
-import { useApiRequest } from "@/lib/api-client";
-import { DocumentListItem } from "@/lib/api/documents";
+import { vi } from "vitest";
+import { DocumentsService } from "@/lib/generated-api";
+import type { DocumentListItem } from "@/lib/generated-api";
 import DocumentDetailPage from "../[documentId]/page";
 
-// Mock the useApiRequest hook
-jest.mock("@/lib/api-client", () => ({
-  useApiRequest: jest.fn(),
+// Mock the generated API
+vi.mock("@/lib/generated-api", () => ({
+  DocumentsService: {
+    getDocumentDocumentsDocumentIdGet: vi.fn(),
+  },
 }));
 
 // Mock next/link
-jest.mock("next/link", () => {
-  return ({ children }: any) => children;
+vi.mock("next/link", () => {
+  return {
+    default: ({ children }: any) => children,
+  };
 });
 
 const mockDocument: DocumentListItem = {
@@ -24,17 +29,13 @@ const mockDocument: DocumentListItem = {
 
 describe("DocumentDetailPage", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   test("renders loading state initially", () => {
-    const mockApiGet = jest.fn(
+    (DocumentsService.getDocumentDocumentsDocumentIdGet as any).mockImplementation(
       () => new Promise((resolve) => setTimeout(() => resolve(mockDocument), 100))
     );
-
-    (useApiRequest as jest.Mock).mockReturnValue({
-      apiGet: mockApiGet,
-    });
 
     render(
       <DocumentDetailPage params={{ documentId: "doc_11111111-2222-3333-4444-555555555555" }} />
@@ -44,11 +45,7 @@ describe("DocumentDetailPage", () => {
   });
 
   test("renders document details on successful fetch", async () => {
-    const mockApiGet = jest.fn().mockResolvedValue(mockDocument);
-
-    (useApiRequest as jest.Mock).mockReturnValue({
-      apiGet: mockApiGet,
-    });
+    (DocumentsService.getDocumentDocumentsDocumentIdGet as any).mockResolvedValue(mockDocument);
 
     render(
       <DocumentDetailPage params={{ documentId: "doc_11111111-2222-3333-4444-555555555555" }} />
@@ -62,11 +59,7 @@ describe("DocumentDetailPage", () => {
   });
 
   test("renders back to documents link", async () => {
-    const mockApiGet = jest.fn().mockResolvedValue(mockDocument);
-
-    (useApiRequest as jest.Mock).mockReturnValue({
-      apiGet: mockApiGet,
-    });
+    (DocumentsService.getDocumentDocumentsDocumentIdGet as any).mockResolvedValue(mockDocument);
 
     render(
       <DocumentDetailPage params={{ documentId: "doc_11111111-2222-3333-4444-555555555555" }} />
@@ -78,25 +71,21 @@ describe("DocumentDetailPage", () => {
   });
 
   test("renders error state on not found", async () => {
-    const mockApiGet = jest.fn().mockRejectedValue(new Error("API error: 404 not found"));
-
-    (useApiRequest as jest.Mock).mockReturnValue({
-      apiGet: mockApiGet,
-    });
+    (DocumentsService.getDocumentDocumentsDocumentIdGet as any).mockRejectedValue(
+      new Error("API error: 404 not found")
+    );
 
     render(<DocumentDetailPage params={{ documentId: "doc_nonexistent" }} />);
 
     await waitFor(() => {
-      expect(screen.getByText("Document not found")).toBeInTheDocument();
+      expect(screen.getAllByText("Document not found")).toHaveLength(2);
     });
   });
 
   test("renders error state on API failure", async () => {
-    const mockApiGet = jest.fn().mockRejectedValue(new Error("Network error"));
-
-    (useApiRequest as jest.Mock).mockReturnValue({
-      apiGet: mockApiGet,
-    });
+    (DocumentsService.getDocumentDocumentsDocumentIdGet as any).mockRejectedValue(
+      new Error("Network error")
+    );
 
     render(
       <DocumentDetailPage params={{ documentId: "doc_11111111-2222-3333-4444-555555555555" }} />
@@ -114,11 +103,7 @@ describe("DocumentDetailPage", () => {
       processing_status: "processing",
     };
 
-    const mockApiGet = jest.fn().mockResolvedValue(processingDoc);
-
-    (useApiRequest as jest.Mock).mockReturnValue({
-      apiGet: mockApiGet,
-    });
+    (DocumentsService.getDocumentDocumentsDocumentIdGet as any).mockResolvedValue(processingDoc);
 
     render(
       <DocumentDetailPage params={{ documentId: "doc_11111111-2222-3333-4444-555555555555" }} />
@@ -139,11 +124,7 @@ describe("DocumentDetailPage", () => {
       processing_status: "failed",
     };
 
-    const mockApiGet = jest.fn().mockResolvedValue(failedDoc);
-
-    (useApiRequest as jest.Mock).mockReturnValue({
-      apiGet: mockApiGet,
-    });
+    (DocumentsService.getDocumentDocumentsDocumentIdGet as any).mockResolvedValue(failedDoc);
 
     render(
       <DocumentDetailPage params={{ documentId: "doc_11111111-2222-3333-4444-555555555555" }} />
@@ -157,11 +138,7 @@ describe("DocumentDetailPage", () => {
   });
 
   test("displays document ID in monospace", async () => {
-    const mockApiGet = jest.fn().mockResolvedValue(mockDocument);
-
-    (useApiRequest as jest.Mock).mockReturnValue({
-      apiGet: mockApiGet,
-    });
+    (DocumentsService.getDocumentDocumentsDocumentIdGet as any).mockResolvedValue(mockDocument);
 
     render(
       <DocumentDetailPage params={{ documentId: "doc_11111111-2222-3333-4444-555555555555" }} />
