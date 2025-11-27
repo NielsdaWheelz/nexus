@@ -33,7 +33,7 @@ export function useApiRequest() {
   const { getToken } = useAuth();
 
   const apiRequest = useCallback(
-    async <T,>(endpoint: string, options?: RequestInit): Promise<T> => {
+    async <T>(endpoint: string, options?: RequestInit): Promise<T> => {
       const token = await getToken();
 
       const headers: Record<string, string> = {
@@ -55,9 +55,7 @@ export function useApiRequest() {
 
       if (!response.ok) {
         const error = data as ApiError;
-        throw new Error(
-          error.error?.message || `API error: ${response.status}`
-        );
+        throw new Error(error.error?.message || `API error: ${response.status}`);
       }
 
       // Handle both paginated and regular responses
@@ -78,14 +76,14 @@ export function useApiRequest() {
   );
 
   const apiGet = useCallback(
-    async <T,>(endpoint: string): Promise<T> => {
+    async <T>(endpoint: string): Promise<T> => {
       return apiRequest<T>(endpoint, { method: "GET" });
     },
     [apiRequest]
   );
 
   const apiPost = useCallback(
-    async <T,>(endpoint: string, body: unknown): Promise<T> => {
+    async <T>(endpoint: string, body: unknown): Promise<T> => {
       return apiRequest<T>(endpoint, {
         method: "POST",
         body: JSON.stringify(body),
@@ -95,7 +93,7 @@ export function useApiRequest() {
   );
 
   const apiPatch = useCallback(
-    async <T,>(endpoint: string, body: unknown): Promise<T> => {
+    async <T>(endpoint: string, body: unknown): Promise<T> => {
       return apiRequest<T>(endpoint, {
         method: "PATCH",
         body: JSON.stringify(body),

@@ -9,7 +9,8 @@
     "lint": "next lint",
     "test": "vitest",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "generate:api": "openapi-typescript-codegen --input http://localhost:8000/openapi.json --output ./lib/generated-api --client fetch --exportCore=false"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.35.5",
@@ -34,6 +35,7 @@
     "eslint": "^8.56.0",
     "eslint-config-next": "^14.0.4",
     "jsdom": "^23.0.1",
+    "openapi-typescript-codegen": "^0.28.0",
     "prettier": "^3.1.1",
     "typescript": "^5.3.3",
     "vite": "^5.0.8",

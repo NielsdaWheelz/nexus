@@ -14,11 +14,7 @@ export interface DocumentListResponse extends PaginatedResponse<DocumentListItem
 /**
  * Build query parameters for document list endpoint
  */
-export function buildDocumentsQuery(
-  cursor?: string | null,
-  limit = 20,
-  status?: string
-): string {
+export function buildDocumentsQuery(cursor?: string | null, limit = 20, status?: string): string {
   const params = new URLSearchParams();
   if (cursor) {
     params.set("cursor", cursor);

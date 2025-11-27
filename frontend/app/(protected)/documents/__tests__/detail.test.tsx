@@ -29,10 +29,7 @@ describe("DocumentDetailPage", () => {
 
   test("renders loading state initially", () => {
     const mockApiGet = jest.fn(
-      () =>
-        new Promise((resolve) =>
-          setTimeout(() => resolve(mockDocument), 100)
-        )
+      () => new Promise((resolve) => setTimeout(() => resolve(mockDocument), 100))
     );
 
     (useApiRequest as jest.Mock).mockReturnValue({
@@ -81,17 +78,13 @@ describe("DocumentDetailPage", () => {
   });
 
   test("renders error state on not found", async () => {
-    const mockApiGet = jest
-      .fn()
-      .mockRejectedValue(new Error("API error: 404 not found"));
+    const mockApiGet = jest.fn().mockRejectedValue(new Error("API error: 404 not found"));
 
     (useApiRequest as jest.Mock).mockReturnValue({
       apiGet: mockApiGet,
     });
 
-    render(
-      <DocumentDetailPage params={{ documentId: "doc_nonexistent" }} />
-    );
+    render(<DocumentDetailPage params={{ documentId: "doc_nonexistent" }} />);
 
     await waitFor(() => {
       expect(screen.getByText("Document not found")).toBeInTheDocument();
@@ -99,9 +92,7 @@ describe("DocumentDetailPage", () => {
   });
 
   test("renders error state on API failure", async () => {
-    const mockApiGet = jest
-      .fn()
-      .mockRejectedValue(new Error("Network error"));
+    const mockApiGet = jest.fn().mockRejectedValue(new Error("Network error"));
 
     (useApiRequest as jest.Mock).mockReturnValue({
       apiGet: mockApiGet,
@@ -112,9 +103,7 @@ describe("DocumentDetailPage", () => {
     );
 
     await waitFor(() => {
-      expect(
-        screen.getByText("Failed to load document")
-      ).toBeInTheDocument();
+      expect(screen.getByText("Failed to load document")).toBeInTheDocument();
       expect(screen.getByText("Network error")).toBeInTheDocument();
     });
   });
@@ -162,9 +151,7 @@ describe("DocumentDetailPage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(
-          "This document failed to process. Please try uploading it again."
-        )
+        screen.getByText("This document failed to process. Please try uploading it again.")
       ).toBeInTheDocument();
     });
   });
@@ -181,9 +168,7 @@ describe("DocumentDetailPage", () => {
     );
 
     await waitFor(() => {
-      expect(
-        screen.getByText("doc_11111111-2222-3333-4444-555555555555")
-      ).toBeInTheDocument();
+      expect(screen.getByText("doc_11111111-2222-3333-4444-555555555555")).toBeInTheDocument();
     });
   });
 });

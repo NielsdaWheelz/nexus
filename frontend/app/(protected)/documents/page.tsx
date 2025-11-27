@@ -71,9 +71,7 @@ export default function DocumentsPage() {
   if (error) {
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-        <h2 className="text-lg font-semibold text-red-900 mb-2">
-          Failed to load documents
-        </h2>
+        <h2 className="text-lg font-semibold text-red-900 mb-2">Failed to load documents</h2>
         <p className="text-red-700 mb-4">{error}</p>
         <button
           onClick={handleRetry}
@@ -89,9 +87,7 @@ export default function DocumentsPage() {
     return (
       <div className="text-center py-12">
         <h2 className="text-2xl font-bold text-gray-900 mb-2">No documents yet</h2>
-        <p className="text-gray-600 mb-6">
-          Upload your first document to get started
-        </p>
+        <p className="text-gray-600 mb-6">Upload your first document to get started</p>
       </div>
     );
   }
@@ -104,18 +100,10 @@ export default function DocumentsPage() {
         <table className="w-full">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                Title
-              </th>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                Type
-              </th>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                Status
-              </th>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                Created
-              </th>
+              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Title</th>
+              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Type</th>
+              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Status</th>
+              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Created</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
@@ -131,15 +119,11 @@ export default function DocumentsPage() {
                 <td className="px-6 py-4 text-sm font-medium text-blue-600 hover:text-blue-800">
                   {doc.title || "(Untitled)"}
                 </td>
-                <td className="px-6 py-4 text-sm text-gray-600">
-                  {doc.source_kind.toUpperCase()}
-                </td>
+                <td className="px-6 py-4 text-sm text-gray-600">{doc.source_kind.toUpperCase()}</td>
                 <td className="px-6 py-4 text-sm">
                   <StatusBadge status={doc.processing_status} />
                 </td>
-                <td className="px-6 py-4 text-sm text-gray-600">
-                  {formatDate(doc.created_at)}
-                </td>
+                <td className="px-6 py-4 text-sm text-gray-600">{formatDate(doc.created_at)}</td>
               </tr>
             ))}
           </tbody>
@@ -161,11 +145,7 @@ export default function DocumentsPage() {
   );
 }
 
-function StatusBadge({
-  status,
-}: {
-  status: "pending" | "processing" | "ready" | "failed";
-}) {
+function StatusBadge({ status }: { status: "pending" | "processing" | "ready" | "failed" }) {
   const colors = {
     pending: "bg-yellow-100 text-yellow-800",
     processing: "bg-blue-100 text-blue-800",
@@ -174,9 +154,7 @@ function StatusBadge({
   };
 
   return (
-    <span
-      className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${colors[status]}`}
-    >
+    <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${colors[status]}`}>
       {status.charAt(0).toUpperCase() + status.slice(1)}
     </span>
   );

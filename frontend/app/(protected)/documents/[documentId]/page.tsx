@@ -5,11 +5,7 @@ import Link from "next/link";
 import { useApiRequest } from "@/lib/api-client";
 import { DocumentListItem } from "@/lib/api/documents";
 
-export default function DocumentDetailPage({
-  params,
-}: {
-  params: { documentId: string };
-}) {
+export default function DocumentDetailPage({ params }: { params: { documentId: string } }) {
   const { apiGet } = useApiRequest();
   const [document, setDocument] = useState<DocumentListItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -19,9 +15,7 @@ export default function DocumentDetailPage({
     const fetchDocument = async () => {
       try {
         const docId = params.documentId;
-        const response = await apiGet<DocumentListItem>(
-          `/documents/${docId}`
-        );
+        const response = await apiGet<DocumentListItem>(`/documents/${docId}`);
         setDocument(response);
         setError(null);
       } catch (err) {
@@ -61,9 +55,7 @@ export default function DocumentDetailPage({
         </Link>
         <div className="bg-red-50 border border-red-200 rounded-lg p-6">
           <h2 className="text-lg font-semibold text-red-900 mb-2">
-            {error === "Document not found"
-              ? "Document not found"
-              : "Failed to load document"}
+            {error === "Document not found" ? "Document not found" : "Failed to load document"}
           </h2>
           <p className="text-red-700">{error}</p>
         </div>
@@ -118,32 +110,22 @@ export default function DocumentDetailPage({
         </div>
 
         <div className="border-t pt-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">
-            Document Details
-          </h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Document Details</h2>
           <div className="grid grid-cols-2 gap-8">
             <div>
               <h3 className="text-sm font-medium text-gray-600 mb-2">ID</h3>
-              <p className="text-gray-900 font-mono text-sm break-all">
-                {document.id}
-              </p>
+              <p className="text-gray-900 font-mono text-sm break-all">{document.id}</p>
             </div>
             <div>
-              <h3 className="text-sm font-medium text-gray-600 mb-2">
-                Processing Status
-              </h3>
-              <p className="text-gray-900 capitalize">
-                {document.processing_status}
-              </p>
+              <h3 className="text-sm font-medium text-gray-600 mb-2">Processing Status</h3>
+              <p className="text-gray-900 capitalize">{document.processing_status}</p>
             </div>
           </div>
         </div>
 
         {document.processing_status === "ready" && (
           <div className="border-t mt-6 pt-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">
-              Document Content
-            </h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Document Content</h2>
             <p className="text-gray-600 text-sm mb-4">
               Document text preview and interaction features coming soon.
             </p>
@@ -170,11 +152,7 @@ export default function DocumentDetailPage({
   );
 }
 
-function StatusBadge({
-  status,
-}: {
-  status: "pending" | "processing" | "ready" | "failed";
-}) {
+function StatusBadge({ status }: { status: "pending" | "processing" | "ready" | "failed" }) {
   const colors = {
     pending: "bg-yellow-100 text-yellow-800",
     processing: "bg-blue-100 text-blue-800",
@@ -183,9 +161,7 @@ function StatusBadge({
   };
 
   return (
-    <span
-      className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${colors[status]}`}
-    >
+    <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${colors[status]}`}>
       {status.charAt(0).toUpperCase() + status.slice(1)}
     </span>
   );
