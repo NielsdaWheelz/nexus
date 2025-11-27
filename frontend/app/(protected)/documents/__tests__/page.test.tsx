@@ -47,13 +47,7 @@ describe("DocumentsPage", () => {
 
   test("renders loading state initially", async () => {
     const mockApiGet = jest.fn(
-      () =>
-        new Promise((resolve) =>
-          setTimeout(
-            () => resolve(mockDocuments),
-            100
-          )
-        )
+      () => new Promise((resolve) => setTimeout(() => resolve(mockDocuments), 100))
     );
 
     (useApiRequest as jest.Mock).mockReturnValue({
@@ -116,9 +110,7 @@ describe("DocumentsPage", () => {
   });
 
   test("renders error state on API failure", async () => {
-    const mockApiGet = jest
-      .fn()
-      .mockRejectedValue(new Error("API error: 500"));
+    const mockApiGet = jest.fn().mockRejectedValue(new Error("API error: 500"));
 
     (useApiRequest as jest.Mock).mockReturnValue({
       apiGet: mockApiGet,
@@ -127,9 +119,7 @@ describe("DocumentsPage", () => {
     render(<DocumentsPage />);
 
     await waitFor(() => {
-      expect(
-        screen.getByText("Failed to load documents")
-      ).toBeInTheDocument();
+      expect(screen.getByText("Failed to load documents")).toBeInTheDocument();
       expect(screen.getByText("API error: 500")).toBeInTheDocument();
       expect(screen.getByText("Retry")).toBeInTheDocument();
     });
@@ -155,9 +145,7 @@ describe("DocumentsPage", () => {
     fireEvent.click(retryButton);
 
     await waitFor(() => {
-      expect(
-        screen.getByText("The Myth of Sisyphus")
-      ).toBeInTheDocument();
+      expect(screen.getByText("The Myth of Sisyphus")).toBeInTheDocument();
     });
   });
 

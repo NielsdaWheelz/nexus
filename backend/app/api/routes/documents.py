@@ -248,6 +248,85 @@ async def list_documents(
 
 
 @router.get(
+    "/{document_id}",
+    response_model=DocumentListItem,
+    status_code=200,
+    summary="Get document detail",
+    description="Retrieve a single document by ID with full metadata.",
+)
+async def get_document(
+    document_id: str,
+    current_user: Annotated[User, Depends(rate_limit_authenticated)],
+    session: Annotated[Session, Depends(_get_session)],
+) -> DocumentListItem:
+    """Get a single document by ID.
+
+    Path Parameters:
+    - document_id: Typed document ID (doc_<uuid>)
+
+    Returns full document metadata with typed ID and timestamps.
+    Returns 404 if document doesn't exist or user doesn't own it.
+
+    Args:
+        document_id: Typed document ID
+        current_user: Authenticated user (must own the document)
+        session: Database session
+
+    Returns:
+        DocumentListItem with full metadata
+
+    Raises:
+        ValidationAppError (422): If document_id format invalid
+        NotFoundError (404): If document not found or user doesn't own it
+
+    Example:
+        >>> GET /documents/doc_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+        >>> {
+        ...     "id": "doc_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        ...     "title": "The Myth of Sisyphus",
+        ...     "source_kind": "pdf",
+        ...     "processing_status": "ready",
+        ...     "created_at": "2025-01-01T12:00:00Z",
+        ...     "updated_at": "2025-01-01T12:05:00Z"
+        ... }
+    """
+    # Parse and validate document_id
+    try:
+        doc_type, doc_uuid = from_api_id(document_id)
+    except ValueError as e:
+        raise ValidationAppError(
+            message=f"Invalid document_id format: {str(e)}",
+            details={"field": "document_id", "value": document_id},
+        ) from e
+
+    # Verify document type
+    if doc_type != "document":
+        raise ValidationAppError(
+            message=f"Expected document ID, got {doc_type}",
+            details={"field": "document_id", "expected_type": "document", "got_type": doc_type},
+        )
+
+    # Retrieve document with ownership check (raises NotFoundError if not found/not owned/deleted)
+    from app.services.documents import _mime_to_source_kind, get_document_for_user
+
+    doc = get_document_for_user(
+        session=session,
+        user=current_user,
+        document_id=doc_uuid,
+    )
+
+    # Convert to API response with typed ID
+    return DocumentListItem(
+        id=to_api_id("document", doc.id),
+        title=doc.title,
+        source_kind=_mime_to_source_kind(doc.original_mime_type),  # type: ignore
+        processing_status=doc.status,  # type: ignore
+        created_at=doc.created_at,
+        updated_at=doc.updated_at,
+    )
+
+
+@router.get(
     "/{document_id}/readers",
     response_model=ReaderListResponse,
     summary="List readers for document",

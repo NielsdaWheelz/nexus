@@ -1128,9 +1128,7 @@ class TestListUserAnnotations:
         data = response.json()
         assert data["error"]["code"] == "VALIDATION_ERROR"
 
-    def test_invalid_user_id_type(
-        self, client_authenticated: TestClient, test_document: Document
-    ):
+    def test_invalid_user_id_type(self, client_authenticated: TestClient, test_document: Document):
         """Test that wrong typed ID (e.g., doc_ instead of usr_) returns 422."""
         doc_typed_id = to_api_id("document", test_document.id)
 
