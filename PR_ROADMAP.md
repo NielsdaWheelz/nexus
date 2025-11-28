@@ -221,7 +221,7 @@ PR 0.2 (FastAPI app for database connection).
   - `documents` (title, file_path/url, canonical_text, media_type, owner_id, visibility, created_at, updated_at)
   - `chunks` (document_id, text, byte_start, byte_end, embedding_id, created_at)
   - `highlights` (document_id, user_id, byte_start, byte_end, created_at)
-  - `annotations` (text, attached_to_highlight_id or chunk_id, user_id, created_at, updated_at, deleted_at)
+  - `annotations` (text, attached_to_highlight_id or user_id, created_at, updated_at, deleted_at)
   - `readers` (user_id, document_id, current_position, last_read_at, created_at, updated_at)
   - `conversations` (user_id, title, created_at, updated_at, deleted_at)
   - `messages` (conversation_id, role, content, created_at)
@@ -886,7 +886,7 @@ PR 5.2 (highlights), PR 3.2 (chunks).
   - Timestamps: created_at, updated_at, deleted_at (soft delete)
   - Annotation IDs typed (`ann_`)
 - Create annotation endpoint (`POST /annotations`):
-  - Accepts highlight_id OR chunk_id (mutually exclusive)
+  - Accepts highlight_id (mutually exclusive)
   - Accepts text (note content)
   - Creates annotation
   - Returns annotation with ID

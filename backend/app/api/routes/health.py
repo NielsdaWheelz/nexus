@@ -6,17 +6,21 @@ Provides:
 
 from fastapi import APIRouter, Response
 
+from app.schemas.common import DataEnvelope, HealthStatus
+
 router = APIRouter()
 
 
-@router.get("/health")
-def health(response: Response) -> dict[str, bool | str]:
+@router.get("/health", response_model=DataEnvelope[HealthStatus])
+def health(response: Response) -> DataEnvelope[HealthStatus]:
     """Health check endpoint.
 
     Returns 200 OK without authentication and is NOT rate-limited.
     This endpoint is always available for health monitoring.
 
     Returns:
-        JSON response with health status
+        DataEnvelope wrapping HealthStatus with ok=True and status="healthy"
     """
-    return {"ok": True, "status": "healthy"}
+    return DataEnvelope(
+        data=HealthStatus(ok=True, status="healthy")
+    )

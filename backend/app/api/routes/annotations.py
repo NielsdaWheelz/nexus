@@ -1,7 +1,7 @@
 """Annotations API routes for creation, updating, deletion, and retrieval.
 
 Routes (spec-aligned):
-- POST /annotations: Create a new annotation on a highlight or chunk
+- POST /annotations: Create a new annotation on a highlight
 - PATCH /annotations/{annotation_id}: Update an annotation
 - DELETE /annotations/{annotation_id}: Delete an annotation (soft delete)
 - GET /documents/{document_id}/annotations: List annotations for a document
@@ -34,6 +34,7 @@ from app.schemas.annotations import (
     CreateAnnotationRequest,
     UpdateAnnotationRequest,
 )
+from app.schemas.common import DataEnvelope
 from app.services.highlights import (
     create_annotation,
     list_annotations_for_document,
@@ -50,28 +51,25 @@ router = APIRouter(tags=["annotations"])
 
 @router.post(
     "/annotations",
-    response_model=AnnotationItem,
+    response_model=DataEnvelope[AnnotationItem],
     status_code=201,
     summary="Create annotation",
-    description="Create a new annotation on a highlight or chunk.",
+    description="Create a new annotation on a highlight.",
 )
 async def create_annotation_endpoint(
     current_user: Annotated[User, Depends(rate_limit_authenticated)],
     session: Annotated[Session, Depends(_get_session)],
     request: CreateAnnotationRequest,
-) -> AnnotationItem:
-    """Create an annotation on a highlight or chunk.
+) -> DataEnvelope[AnnotationItem]:
+    """Create an annotation on a highlight.
 
     Accepts:
-    - highlight_id: Typed highlight ID (hl_<uuid>) OR
-    - chunk_id: Typed chunk ID (chunk_<uuid>)
+    - highlight_id: Typed highlight ID (hl_<uuid>)
     - content: Annotation text (non-empty after stripping)
 
     Validates:
-    - Exactly one of highlight_id or chunk_id is provided
     - highlight_id is a valid typed ID with "highlight" type
-    - chunk_id is a valid typed ID with "chunk" type
-    - Highlight/chunk exists and is owned/accessible by current user
+    - Highlight exists and is owned/accessible by current user
     - Content is non-empty
 
     Returns typed API response with ann_<uuid> ID.
@@ -79,23 +77,21 @@ async def create_annotation_endpoint(
     Args:
         current_user: Authenticated user (rate limited)
         session: SQLAlchemy database session
-        request: CreateAnnotationRequest with highlight_id/chunk_id and content
+        request: CreateAnnotationRequest with highlight_id and content
 
     Returns:
         AnnotationItem with typed IDs and timestamps
 
     Raises:
         ValidationAppError (422): If validation fails
-            - Both or neither highlight_id/chunk_id provided
             - Invalid ID format or type
             - Empty content
-        NotFoundError (404): If highlight/chunk doesn't exist or is not accessible
+        NotFoundError (404): If highlight doesn't exist or is not accessible
         UnauthorizedError (401): If not authenticated
     """
     highlight_uuid = None
-    chunk_uuid = None
 
-    # Parse and validate highlight_id if provided
+    # Parse and validate highlight_id
     if request.highlight_id:
         try:
             hl_type, highlight_uuid = from_api_id(request.highlight_id)
@@ -115,49 +111,33 @@ async def create_annotation_endpoint(
                 },
             )
 
-    # Parse and validate chunk_id if provided
-    if request.chunk_id:
-        try:
-            chunk_type, chunk_uuid = from_api_id(request.chunk_id)
-        except ValueError as e:
-            raise ValidationAppError(
-                message=f"Invalid chunk_id format: {str(e)}",
-                details={"field": "chunk_id", "reason": str(e)},
-            )
-
-        if chunk_type != "chunk":
-            raise ValidationAppError(
-                message=f"Invalid chunk_id type: expected 'chunk', got '{chunk_type}'",
-                details={"field": "chunk_id", "expected_type": "chunk", "got_type": chunk_type},
-            )
-
     # Create annotation using service layer
     annotation = create_annotation(
         session=session,
         user=current_user,
         highlight_id=highlight_uuid,
-        chunk_id=chunk_uuid,
         content=request.content,
     )
 
     # Convert to API response with typed IDs
-    return AnnotationItem(
-        id=to_api_id("annotation", annotation.id),
-        user_id=to_api_id("user", annotation.user_id),
-        document_id=to_api_id("document", annotation.document_id) if annotation.document_id else "",
-        highlight_id=(
-            to_api_id("highlight", annotation.highlight_id) if annotation.highlight_id else None
-        ),
-        chunk_id=to_api_id("chunk", annotation.chunk_id) if annotation.chunk_id else None,
-        content=annotation.content,
-        created_at=annotation.created_at,
-        updated_at=annotation.updated_at,
+    return DataEnvelope(
+        data=AnnotationItem(
+            id=to_api_id("annotation", annotation.id),
+            user_id=to_api_id("user", annotation.user_id),
+            document_id=to_api_id("document", annotation.document_id) if annotation.document_id else "",
+            highlight_id=(
+                to_api_id("highlight", annotation.highlight_id) if annotation.highlight_id else None
+            ),
+            content=annotation.content,
+            created_at=annotation.created_at,
+            updated_at=annotation.updated_at,
+        )
     )
 
 
 @router.patch(
     "/annotations/{annotation_id}",
-    response_model=AnnotationItem,
+    response_model=DataEnvelope[AnnotationItem],
     status_code=200,
     summary="Update annotation",
     description="Update an annotation's content.",
@@ -167,7 +147,7 @@ async def update_annotation_endpoint(
     session: Annotated[Session, Depends(_get_session)],
     annotation_id: str = Path(..., description="Typed annotation ID (ann_<uuid>)"),
     request: UpdateAnnotationRequest = None,
-) -> AnnotationItem:
+) -> DataEnvelope[AnnotationItem]:
     """Update an annotation's content.
 
     Accepts:
@@ -221,17 +201,18 @@ async def update_annotation_endpoint(
     )
 
     # Convert to API response with typed IDs
-    return AnnotationItem(
-        id=to_api_id("annotation", annotation.id),
-        user_id=to_api_id("user", annotation.user_id),
-        document_id=to_api_id("document", annotation.document_id) if annotation.document_id else "",
-        highlight_id=(
-            to_api_id("highlight", annotation.highlight_id) if annotation.highlight_id else None
-        ),
-        chunk_id=to_api_id("chunk", annotation.chunk_id) if annotation.chunk_id else None,
-        content=annotation.content,
-        created_at=annotation.created_at,
-        updated_at=annotation.updated_at,
+    return DataEnvelope(
+        data=AnnotationItem(
+            id=to_api_id("annotation", annotation.id),
+            user_id=to_api_id("user", annotation.user_id),
+            document_id=to_api_id("document", annotation.document_id) if annotation.document_id else "",
+            highlight_id=(
+                to_api_id("highlight", annotation.highlight_id) if annotation.highlight_id else None
+            ),
+            content=annotation.content,
+            created_at=annotation.created_at,
+            updated_at=annotation.updated_at,
+        )
     )
 
 
@@ -296,7 +277,7 @@ async def delete_annotation_endpoint(
 
 @router.get(
     "/documents/{document_id}/annotations",
-    response_model=AnnotationListResponse,
+    response_model=DataEnvelope[AnnotationListResponse],
     status_code=200,
     summary="List annotations for document",
     description="List all annotations on a specific document owned by current user.",
@@ -307,7 +288,7 @@ async def list_document_annotations(
     document_id: str = Path(..., description="Typed document ID (doc_<uuid>)"),
     limit: int = Query(default=20, ge=1, le=100, description="Results per page"),
     cursor: str | None = Query(None, description="Pagination cursor from previous response"),
-) -> AnnotationListResponse:
+) -> DataEnvelope[AnnotationListResponse]:
     """List annotations for a document with cursor pagination.
 
     Enforces:
@@ -354,28 +335,29 @@ async def list_document_annotations(
     )
 
     # Convert to API response (with typed IDs)
-    return AnnotationListResponse(
-        items=[
-            AnnotationItem(
-                id=to_api_id("annotation", ann.id),
-                user_id=to_api_id("user", ann.user_id),
-                document_id=to_api_id("document", ann.document_id) if ann.document_id else "",
-                highlight_id=to_api_id("highlight", ann.highlight_id) if ann.highlight_id else None,
-                chunk_id=to_api_id("chunk", ann.chunk_id) if ann.chunk_id else None,
-                content=ann.content,
-                created_at=ann.created_at,
-                updated_at=ann.updated_at,
-            )
-            for ann in paginated.items
-        ],
-        next_cursor=paginated.next_cursor,
-        has_more=paginated.has_more,
+    return DataEnvelope(
+        data=AnnotationListResponse(
+            items=[
+                AnnotationItem(
+                    id=to_api_id("annotation", ann.id),
+                    user_id=to_api_id("user", ann.user_id),
+                    document_id=to_api_id("document", ann.document_id) if ann.document_id else "",
+                    highlight_id=to_api_id("highlight", ann.highlight_id) if ann.highlight_id else None,
+                    content=ann.content,
+                    created_at=ann.created_at,
+                    updated_at=ann.updated_at,
+                )
+                for ann in paginated.items
+            ],
+            next_cursor=paginated.next_cursor,
+            has_more=paginated.has_more,
+        )
     )
 
 
 @router.get(
     "/highlights/{highlight_id}/annotations",
-    response_model=AnnotationListResponse,
+    response_model=DataEnvelope[AnnotationListResponse],
     status_code=200,
     summary="List annotations for highlight",
     description="List all annotations on a specific highlight.",
@@ -386,7 +368,7 @@ async def list_highlight_annotations(
     highlight_id: str = Path(..., description="Typed highlight ID (hl_<uuid>)"),
     limit: int = Query(default=20, ge=1, le=100, description="Results per page"),
     cursor: str | None = Query(None, description="Pagination cursor from previous response"),
-) -> AnnotationListResponse:
+) -> DataEnvelope[AnnotationListResponse]:
     """List annotations for a highlight with cursor pagination.
 
     Enforces:
@@ -453,28 +435,29 @@ async def list_highlight_annotations(
     )
 
     # Convert to API response (with typed IDs)
-    return AnnotationListResponse(
-        items=[
-            AnnotationItem(
-                id=to_api_id("annotation", ann.id),
-                user_id=to_api_id("user", ann.user_id),
-                document_id=to_api_id("document", ann.document_id) if ann.document_id else "",
-                highlight_id=to_api_id("highlight", ann.highlight_id) if ann.highlight_id else None,
-                chunk_id=to_api_id("chunk", ann.chunk_id) if ann.chunk_id else None,
-                content=ann.content,
-                created_at=ann.created_at,
-                updated_at=ann.updated_at,
-            )
-            for ann in paginated.items
-        ],
-        next_cursor=paginated.next_cursor,
-        has_more=paginated.has_more,
+    return DataEnvelope(
+        data=AnnotationListResponse(
+            items=[
+                AnnotationItem(
+                    id=to_api_id("annotation", ann.id),
+                    user_id=to_api_id("user", ann.user_id),
+                    document_id=to_api_id("document", ann.document_id) if ann.document_id else "",
+                    highlight_id=to_api_id("highlight", ann.highlight_id) if ann.highlight_id else None,
+                    content=ann.content,
+                    created_at=ann.created_at,
+                    updated_at=ann.updated_at,
+                )
+                for ann in paginated.items
+            ],
+            next_cursor=paginated.next_cursor,
+            has_more=paginated.has_more,
+        )
     )
 
 
 @router.get(
     "/users/{user_id}/annotations",
-    response_model=AnnotationListResponse,
+    response_model=DataEnvelope[AnnotationListResponse],
     status_code=200,
     summary="List user's annotations",
     description="List all annotations created by a user.",
@@ -485,7 +468,7 @@ async def list_user_annotations(
     user_id: str = Path(..., description="Typed user ID (usr_<uuid>)"),
     limit: int = Query(default=20, ge=1, le=100, description="Results per page"),
     cursor: str | None = Query(None, description="Pagination cursor from previous response"),
-) -> AnnotationListResponse:
+) -> DataEnvelope[AnnotationListResponse]:
     """List all annotations created by a user with cursor pagination.
 
     Enforces:
@@ -537,20 +520,21 @@ async def list_user_annotations(
     )
 
     # Convert to API response (with typed IDs)
-    return AnnotationListResponse(
-        items=[
-            AnnotationItem(
-                id=to_api_id("annotation", ann.id),
-                user_id=to_api_id("user", ann.user_id),
-                document_id=to_api_id("document", ann.document_id) if ann.document_id else "",
-                highlight_id=to_api_id("highlight", ann.highlight_id) if ann.highlight_id else None,
-                chunk_id=to_api_id("chunk", ann.chunk_id) if ann.chunk_id else None,
-                content=ann.content,
-                created_at=ann.created_at,
-                updated_at=ann.updated_at,
-            )
-            for ann in paginated.items
-        ],
-        next_cursor=paginated.next_cursor,
-        has_more=paginated.has_more,
+    return DataEnvelope(
+        data=AnnotationListResponse(
+            items=[
+                AnnotationItem(
+                    id=to_api_id("annotation", ann.id),
+                    user_id=to_api_id("user", ann.user_id),
+                    document_id=to_api_id("document", ann.document_id) if ann.document_id else "",
+                    highlight_id=to_api_id("highlight", ann.highlight_id) if ann.highlight_id else None,
+                    content=ann.content,
+                    created_at=ann.created_at,
+                    updated_at=ann.updated_at,
+                )
+                for ann in paginated.items
+            ],
+            next_cursor=paginated.next_cursor,
+            has_more=paginated.has_more,
+        )
     )

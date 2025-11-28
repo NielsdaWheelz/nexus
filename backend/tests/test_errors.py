@@ -401,7 +401,9 @@ class TestHealthEndpointStillWorks:
         response = test_client.get("/health")
 
         assert response.status_code == 200
-        assert response.json()["status"] == "healthy"
+        data = response.json()["data"]
+        assert data["status"] == "healthy"
+        assert data["ok"] is True
 
 
 class TestErrorResponseFormat:

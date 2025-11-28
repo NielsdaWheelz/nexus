@@ -105,7 +105,6 @@ def create_test_document(
         content_hash="abc123",
         canonical_text="test content",
         canonical_hash="def456",
-        canonical_version=1,
         text_byte_length=12,
         extractor_version="1.0",
         status=status,
@@ -138,7 +137,7 @@ class TestGetDocumentHappyPath:
         response = client_authenticated.get(f"/documents/{doc_id}")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
 
         # Verify response structure
         assert "id" in result
@@ -164,7 +163,7 @@ class TestGetDocumentHappyPath:
         response = client_authenticated.get(f"/documents/{doc_id}")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
 
         # Verify typed ID
         assert result["id"].startswith("doc_")
@@ -180,7 +179,7 @@ class TestGetDocumentHappyPath:
         response = client_authenticated.get(f"/documents/{doc_id}")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
 
         # Parse timestamps (should not raise)
         created = datetime.fromisoformat(result["created_at"].replace("Z", "+00:00"))
@@ -201,7 +200,7 @@ class TestGetDocumentHappyPath:
         response = client_authenticated.get(f"/documents/{doc_id}")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
         assert result["source_kind"] == "pdf"
 
     def test_get_document_epub(
@@ -214,7 +213,7 @@ class TestGetDocumentHappyPath:
         response = client_authenticated.get(f"/documents/{doc_id}")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
         assert result["source_kind"] == "epub"
 
     def test_get_document_html(
@@ -227,7 +226,7 @@ class TestGetDocumentHappyPath:
         response = client_authenticated.get(f"/documents/{doc_id}")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
         assert result["source_kind"] == "html"
 
     def test_get_document_status_pending(
@@ -240,7 +239,7 @@ class TestGetDocumentHappyPath:
         response = client_authenticated.get(f"/documents/{doc_id}")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
         assert result["processing_status"] == "pending"
 
     def test_get_document_status_processing(
@@ -253,7 +252,7 @@ class TestGetDocumentHappyPath:
         response = client_authenticated.get(f"/documents/{doc_id}")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
         assert result["processing_status"] == "processing"
 
     def test_get_document_status_ready(
@@ -266,7 +265,7 @@ class TestGetDocumentHappyPath:
         response = client_authenticated.get(f"/documents/{doc_id}")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
         assert result["processing_status"] == "ready"
 
     def test_get_document_status_failed(
@@ -279,7 +278,7 @@ class TestGetDocumentHappyPath:
         response = client_authenticated.get(f"/documents/{doc_id}")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
         assert result["processing_status"] == "failed"
 
 
@@ -458,7 +457,7 @@ class TestGetDocumentACL:
         response = client_authenticated.get(f"/documents/{doc_id}")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
         assert result["id"] == doc_id
 
 
@@ -541,6 +540,7 @@ class TestGetDocumentErrorEnvelope:
         assert response.status_code == 200
         result = response.json()
 
-        # Should NOT have error field in success response
+        # Should NOT have error field in success response (but should have data wrapper)
         assert "error" not in result
-        assert "id" in result
+        assert "data" in result
+        assert "id" in result["data"]

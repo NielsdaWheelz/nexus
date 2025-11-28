@@ -172,7 +172,7 @@ RETURNING canonical_hash
 
 - `status = 'ready'`
 - `canonical_text`, `structure`, `metadata` populated
-- `canonical_version` possibly incremented
+- `hash` changed
 - Downstream jobs enqueued
 
 **Failure postconditions**:
@@ -210,7 +210,7 @@ RETURNING canonical_hash
 **Idempotency key**:
 
 ```
-(document_id, canonical_version, chunk_version, embedding_model)
+(document_id, hash?, chunk_version, embedding_model)
 ```
 
 If chunks already exist with these parameters, skip.
@@ -259,7 +259,7 @@ WHERE id = $3
 
 See [spec/anchors.md](anchors.md) §3 for full specification.
 
-Triggered when `canonical_version` increments (document extracted with different extractor_version).
+Triggered when `hash` changes (document extracted with different extractor_version).
 
 ---
 
@@ -384,8 +384,7 @@ When extractor code changes (bug fix, algorithm improvement):
 1. Bump `EXTRACTOR_VERSION` (e.g., `2024.11.1` → `2024.11.2`)
 2. Deploy new backend
 3. Any new ingestions use new version
-4. Highlights on old documents remain valid (different `canonical_version` values)
-5. If re-extraction triggered: `canonical_version` increments if hash differs
+4. Highlights on old documents remain valid (different `hash` values)
 
 ### 7.2 Multi-Version Compatibility
 

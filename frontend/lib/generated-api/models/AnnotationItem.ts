@@ -12,7 +12,6 @@
  * user_id: Typed user ID (usr_<uuid>)
  * document_id: Typed document ID (doc_<uuid>)
  * highlight_id: Optional typed highlight ID (hl_<uuid>)
- * chunk_id: Optional typed chunk ID (chunk_<uuid>)
  * content: The annotation text
  * created_at: UTC timestamp of creation
  * updated_at: UTC timestamp of last update
@@ -34,10 +33,6 @@ export type AnnotationItem = {
    * Typed highlight ID (hl_<uuid>), if attached to highlight
    */
   highlight_id?: string | null;
-  /**
-   * Typed chunk ID (chunk_<uuid>), if attached to chunk
-   */
-  chunk_id?: string | null;
   /**
    * Annotation text content
    */

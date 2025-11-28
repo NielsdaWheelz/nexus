@@ -14,13 +14,15 @@ from app.db.base import Base
 
 
 class Annotation(Base):
-    """Annotation model representing a user's note (text) attached to a highlight or chunk.
+    """Annotation model representing a user's note (text) attached to a highlight.
+
+    Annotations attach only to highlights (user-selected spans), never to chunks.
+    Chunks are purely for retrieval and embeddings; they are not annotation targets.
 
     Fields:
     - id: UUID primary key
     - user_id: FK to users.id (creator)
-    - highlight_id: FK to highlights.id (optional, the highlight being annotated)
-    - chunk_id: FK to content_chunks.id (optional, the chunk being annotated)
+    - highlight_id: FK to highlights.id (required, the highlight being annotated)
     - content: The annotation text (markdown or plain text)
     - is_public: Whether annotation is shared publicly
 
@@ -30,8 +32,7 @@ class Annotation(Base):
     - updated_at: UTC timestamp of last update
 
     Invariants:
-    - Exactly one of highlight_id or chunk_id must be set
-    - Annotations always reference valid highlights or chunks
+    - highlight_id is required (not nullable)
     - Cascade delete when highlight is deleted
     """
 
@@ -41,11 +42,8 @@ class Annotation(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
     )
-    highlight_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("highlights.id"), nullable=True, index=True
-    )
-    chunk_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("content_chunks.id"), nullable=True, index=True
+    highlight_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("highlights.id"), nullable=False, index=True
     )
 
     content: Mapped[str] = mapped_column(Text, nullable=False)
@@ -101,10 +99,5 @@ class Annotation(Base):
 
     __table_args__ = (
         Index("idx_annotations_highlight", highlight_id, postgresql_where="deleted_at IS NULL"),
-        Index("idx_annotations_chunk", chunk_id, postgresql_where="deleted_at IS NULL"),
         Index("idx_annotations_user", user_id, postgresql_where="deleted_at IS NULL"),
-        CheckConstraint(
-            "(highlight_id IS NOT NULL AND chunk_id IS NULL) OR (highlight_id IS NULL AND chunk_id IS NOT NULL)",
-            name="ck_annotations_exactly_one_anchor",
-        ),
     )

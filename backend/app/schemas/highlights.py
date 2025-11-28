@@ -37,8 +37,7 @@ class HighlightSummary(BaseModel):
         quote: The exact text of the highlight
         prefix: Context before the quote
         suffix: Context after the quote
-        canonical_version: Version of canonical text (for documents only)
-        transcript_hash: Transcript hash (for episodes/videos only)
+        transcript_hash: Transcript hash (for episodes/videos only; documents use byte offsets + canonical_hash)
         pdf_page_number: PDF page number (for PDF anchors only)
         pdf_char_offset: PDF character offset (for PDF anchors only)
         pdf_file_hash: PDF file hash (for PDF anchors only)
@@ -64,9 +63,6 @@ class HighlightSummary(BaseModel):
     quote: str = Field(description="The exact text of the highlight")
     prefix: str = Field(description="Context before the quote")
     suffix: str = Field(description="Context after the quote")
-    canonical_version: Optional[int] = Field(
-        default=None, description="Canonical version (documents only)"
-    )
     transcript_hash: Optional[str] = Field(
         default=None, description="Transcript hash (episodes/videos only)"
     )
@@ -109,7 +105,6 @@ class HighlightSummary(BaseModel):
                 "quote": "example text",
                 "prefix": "before ",
                 "suffix": " after",
-                "canonical_version": 1,
                 "transcript_hash": None,
                 "pdf_page_number": None,
                 "pdf_char_offset": None,
@@ -146,11 +141,12 @@ class AnnotationSummary(BaseModel):
     raw UUID (not typed ID). API responses will convert this to typed ID format
     during serialization.
 
+    Annotations attach only to highlights, never to chunks.
+
     Attributes:
         id: Raw annotation UUID (not typed ID; conversion happens at API boundary)
         user_id: Raw user UUID (creator)
-        highlight_id: Optional raw highlight UUID (the highlight being annotated)
-        chunk_id: Optional raw chunk UUID (the chunk being annotated)
+        highlight_id: Raw highlight UUID (the highlight being annotated, required)
         document_id: Optional raw document UUID (for convenience in listing)
         content: The annotation text content
         is_public: Whether annotation is shared publicly
@@ -160,12 +156,7 @@ class AnnotationSummary(BaseModel):
 
     id: UUID = Field(description="Raw annotation UUID")
     user_id: UUID = Field(description="Raw user UUID (creator)")
-    highlight_id: Optional[UUID] = Field(
-        default=None, description="Raw highlight UUID (if attached to highlight)"
-    )
-    chunk_id: Optional[UUID] = Field(
-        default=None, description="Raw chunk UUID (if attached to chunk)"
-    )
+    highlight_id: UUID = Field(description="Raw highlight UUID (required)")
     document_id: Optional[UUID] = Field(
         default=None, description="Raw document UUID (for listing by document)"
     )
@@ -180,7 +171,6 @@ class AnnotationSummary(BaseModel):
                 "id": "44444444-5555-6666-7777-888888888888",
                 "user_id": "22222222-3333-4444-5555-666666666666",
                 "highlight_id": "11111111-2222-3333-4444-555555555555",
-                "chunk_id": None,
                 "document_id": "33333333-4444-5555-6666-777777777777",
                 "content": "This is an important passage.",
                 "is_public": False,

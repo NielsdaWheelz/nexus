@@ -60,7 +60,6 @@ def test_document(db_session: Session, authenticated_user: User) -> Document:
         content_hash="abc123",
         canonical_text="The quick brown fox jumps over the lazy dog. This is a test document with some content.",
         canonical_hash="def456",
-        canonical_version=1,
         text_byte_length=85,
         extractor_version="1.0",
         status="ready",
@@ -82,7 +81,6 @@ def other_user_document(db_session: Session, other_user: User) -> Document:
         content_hash="xyz789",
         canonical_text="Some other content that the authenticated user should not access.",
         canonical_hash="uvw456",
-        canonical_version=1,
         text_byte_length=65,
         extractor_version="1.0",
         status="ready",
@@ -138,7 +136,7 @@ class TestCreateHighlight:
         )
 
         assert response.status_code == 201
-        data = response.json()
+        data = response.json()["data"]
         assert data["id"].startswith("hlght_")
         assert data["document_id"] == doc_typed_id
         assert data["byte_start"] == 4
@@ -340,8 +338,7 @@ class TestListDocumentHighlights:
             quote="quick brown",
             prefix="The ",
             suffix=" fox",
-            canonical_version=1,
-        )
+            )
         db_session.add(hl1)
 
         # Highlight 2: "lazy dog"
@@ -355,15 +352,14 @@ class TestListDocumentHighlights:
             quote="lazy dog",
             prefix="the ",
             suffix=". This",
-            canonical_version=1,
-        )
+            )
         db_session.add(hl2)
         db_session.flush()
 
         response = client_authenticated.get(f"/documents/{doc_typed_id}/highlights")
 
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         assert len(data["items"]) == 2
         assert data["has_more"] is False
         assert data["next_cursor"] is None
@@ -386,7 +382,7 @@ class TestListDocumentHighlights:
         response = client_authenticated.get(f"/documents/{doc_typed_id}/highlights")
 
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         assert len(data["items"]) == 0
         assert data["has_more"] is False
         assert data["next_cursor"] is None
@@ -413,8 +409,7 @@ class TestListDocumentHighlights:
                 quote=f"text{i}",
                 prefix="",
                 suffix="",
-                canonical_version=1,
-            )
+                    )
             db_session.add(hl)
         db_session.flush()
 
@@ -424,7 +419,7 @@ class TestListDocumentHighlights:
             params={"limit": 2},
         )
         assert response1.status_code == 200
-        data1 = response1.json()
+        data1 = response1.json()["data"]
         assert len(data1["items"]) == 2
         assert data1["has_more"] is True
         assert data1["next_cursor"] is not None
@@ -435,7 +430,7 @@ class TestListDocumentHighlights:
             params={"limit": 2, "cursor": data1["next_cursor"]},
         )
         assert response2.status_code == 200
-        data2 = response2.json()
+        data2 = response2.json()["data"]
         assert len(data2["items"]) == 1
         assert data2["has_more"] is False
 
@@ -493,8 +488,7 @@ class TestListDocumentHighlights:
             quote="The q",
             prefix="",
             suffix="",
-            canonical_version=1,
-        )
+            )
         hl_user2 = Highlight(
             user_id=other_user.id,
             media_type="document",
@@ -505,8 +499,7 @@ class TestListDocumentHighlights:
             quote="brown",
             prefix="",
             suffix="",
-            canonical_version=1,
-        )
+            )
         db_session.add(hl_user1)
         db_session.add(hl_user2)
         db_session.flush()
@@ -514,7 +507,7 @@ class TestListDocumentHighlights:
         response = client_authenticated.get(f"/documents/{doc_typed_id}/highlights")
 
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         # Should only see authenticated_user's highlight
         assert len(data["items"]) == 1
         assert data["items"][0]["byte_start"] == 0
@@ -544,15 +537,14 @@ class TestListUserHighlights:
             quote="The q",
             prefix="",
             suffix="",
-            canonical_version=1,
-        )
+            )
         db_session.add(hl)
         db_session.flush()
 
         response = client_authenticated.get(f"/users/{user_typed_id}/highlights")
 
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         assert len(data["items"]) == 1
         assert data["items"][0]["id"].startswith("hlght_")
         assert data["has_more"] is False
@@ -568,7 +560,7 @@ class TestListUserHighlights:
         response = client_authenticated.get(f"/users/{user_typed_id}/highlights")
 
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         assert len(data["items"]) == 0
         assert data["has_more"] is False
 
@@ -594,8 +586,7 @@ class TestListUserHighlights:
                 quote=f"text{i}",
                 prefix="",
                 suffix="",
-                canonical_version=1,
-            )
+                    )
             db_session.add(hl)
         db_session.flush()
 
@@ -605,7 +596,7 @@ class TestListUserHighlights:
             params={"limit": 2},
         )
         assert response1.status_code == 200
-        data1 = response1.json()
+        data1 = response1.json()["data"]
         assert len(data1["items"]) == 2
         assert data1["has_more"] is True
         assert data1["next_cursor"] is not None
@@ -616,7 +607,7 @@ class TestListUserHighlights:
             params={"limit": 2, "cursor": data1["next_cursor"]},
         )
         assert response2.status_code == 200
-        data2 = response2.json()
+        data2 = response2.json()["data"]
         assert len(data2["items"]) == 1
         assert data2["has_more"] is False
 

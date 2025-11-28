@@ -43,9 +43,10 @@ class Highlight(Base):
     - prefix: Text before the highlight (for disambiguation)
     - suffix: Text after the highlight (for disambiguation)
 
-    Version anchors:
-    - canonical_version: Version of canonical text when highlight was created (for documents)
-    - transcript_hash: SHA256 of transcript at creation time (for episodes/videos)
+    Version anchors (hash-based, no integer versions):
+    - text_start/text_end: Byte offsets into canonical text (documents) or transcript (episodes/videos)
+    - transcript_hash: SHA256 of transcript at creation time (for episodes/videos only)
+    - For documents: anchoring relies on byte offsets into canonical_text (stability via canonical_hash)
 
     PDF-specific anchoring (only set if anchor_type='pdf'):
     - pdf_page_number: Page number in PDF
@@ -90,8 +91,7 @@ class Highlight(Base):
     prefix: Mapped[str] = mapped_column(Text, nullable=False)
     suffix: Mapped[str] = mapped_column(Text, nullable=False)
 
-    # Version anchors
-    canonical_version: Mapped[Optional[int]] = mapped_column(nullable=True)
+    # Transcript hash (for episodes/videos only)
     transcript_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
     # PDF-specific
@@ -180,11 +180,11 @@ class Highlight(Base):
         CheckConstraint(
             "color IN ('yellow', 'blue', 'green', 'pink', 'purple')", name="ck_highlights_color"
         ),
-        # Version anchor consistency
+        # Transcript hash consistency (for episodes/videos only)
         CheckConstraint(
-            "(media_type = 'document' AND canonical_version IS NOT NULL AND transcript_hash IS NULL) OR "
-            "(media_type IN ('episode', 'video') AND transcript_hash IS NOT NULL AND canonical_version IS NULL)",
-            name="ck_highlights_version_anchor",
+            "(media_type IN ('episode', 'video') AND transcript_hash IS NOT NULL) OR "
+            "(media_type = 'document' AND transcript_hash IS NULL)",
+            name="ck_highlights_transcript_hash",
         ),
         # Anchor type validity
         CheckConstraint(

@@ -27,6 +27,7 @@ from app.core.pagination import PaginationParams
 from app.db.session import get_session as _get_session
 from app.models.document import Document
 from app.models.user import User
+from app.schemas.common import DataEnvelope
 from app.schemas.highlights import (
     CreateHighlightRequest,
     HighlightItem,
@@ -45,7 +46,7 @@ router = APIRouter(tags=["highlights"])
 
 @router.post(
     "/highlights",
-    response_model=HighlightItem,
+    response_model=DataEnvelope[HighlightItem],
     status_code=201,
     summary="Create highlight",
     description="Create a new highlight with byte-range anchor on a document.",
@@ -54,7 +55,7 @@ async def create_highlight_endpoint(
     current_user: Annotated[User, Depends(rate_limit_authenticated)],
     session: Annotated[Session, Depends(_get_session)],
     request: CreateHighlightRequest,
-) -> HighlightItem:
+) -> DataEnvelope[HighlightItem]:
     """Create a highlight with byte-range anchor.
 
     Accepts:
@@ -169,6 +170,7 @@ async def create_highlight_endpoint(
     suffix = canonical_bytes[request.byte_end : suffix_end].decode("utf-8", errors="replace")
 
     # Create highlight via service layer
+    # Note: canonical_version is removed; highlights now use hash-based anchoring
     highlight_summary = create_highlight(
         session=session,
         user=current_user,
@@ -180,23 +182,24 @@ async def create_highlight_endpoint(
         quote=quote,
         prefix=prefix,
         suffix=suffix,
-        canonical_version=1,  # Phase 1: always version 1
     )
 
     # Convert to API response (with typed IDs)
-    return HighlightItem(
-        id=to_api_id("highlight", highlight_summary.id),
-        document_id=to_api_id("document", highlight_summary.media_id),
-        byte_start=highlight_summary.text_start,
-        byte_end=highlight_summary.text_end,
-        created_at=highlight_summary.created_at,
-        updated_at=highlight_summary.updated_at,
+    return DataEnvelope(
+        data=HighlightItem(
+            id=to_api_id("highlight", highlight_summary.id),
+            document_id=to_api_id("document", highlight_summary.media_id),
+            byte_start=highlight_summary.text_start,
+            byte_end=highlight_summary.text_end,
+            created_at=highlight_summary.created_at,
+            updated_at=highlight_summary.updated_at,
+        )
     )
 
 
 @router.get(
     "/documents/{document_id}/highlights",
-    response_model=HighlightListResponse,
+    response_model=DataEnvelope[HighlightListResponse],
     status_code=200,
     summary="List highlights for document",
     description="List all highlights on a specific document owned by current user.",
@@ -207,7 +210,7 @@ async def list_document_highlights(
     document_id: str = Path(..., description="Typed document ID (doc_<uuid>)"),
     limit: int = Query(default=20, ge=1, le=100, description="Results per page"),
     cursor: str | None = Query(None, description="Pagination cursor from previous response"),
-) -> HighlightListResponse:
+) -> DataEnvelope[HighlightListResponse]:
     """List highlights for a document with cursor pagination.
 
     Enforces:
@@ -269,26 +272,28 @@ async def list_document_highlights(
     )
 
     # Convert to API response (with typed IDs)
-    return HighlightListResponse(
-        items=[
-            HighlightItem(
-                id=to_api_id("highlight", hl.id),
-                document_id=to_api_id("document", hl.media_id),
-                byte_start=hl.text_start,
-                byte_end=hl.text_end,
-                created_at=hl.created_at,
-                updated_at=hl.updated_at,
-            )
-            for hl in paginated.items
-        ],
-        next_cursor=paginated.next_cursor,
-        has_more=paginated.has_more,
+    return DataEnvelope(
+        data=HighlightListResponse(
+            items=[
+                HighlightItem(
+                    id=to_api_id("highlight", hl.id),
+                    document_id=to_api_id("document", hl.media_id),
+                    byte_start=hl.text_start,
+                    byte_end=hl.text_end,
+                    created_at=hl.created_at,
+                    updated_at=hl.updated_at,
+                )
+                for hl in paginated.items
+            ],
+            next_cursor=paginated.next_cursor,
+            has_more=paginated.has_more,
+        )
     )
 
 
 @router.get(
     "/users/{user_id}/highlights",
-    response_model=HighlightListResponse,
+    response_model=DataEnvelope[HighlightListResponse],
     status_code=200,
     summary="List user's highlights",
     description="List all highlights created by a user across all documents.",
@@ -299,7 +304,7 @@ async def list_user_highlights(
     user_id: str = Path(..., description="Typed user ID (usr_<uuid>)"),
     limit: int = Query(default=20, ge=1, le=100, description="Results per page"),
     cursor: str | None = Query(None, description="Pagination cursor from previous response"),
-) -> HighlightListResponse:
+) -> DataEnvelope[HighlightListResponse]:
     """List all highlights created by a user with cursor pagination.
 
     Enforces:
@@ -413,18 +418,20 @@ async def list_user_highlights(
         )
 
     # Convert to API response
-    return HighlightListResponse(
-        items=[
-            HighlightItem(
-                id=to_api_id("highlight", hl.id),
-                document_id=to_api_id("document", hl.media_id),
-                byte_start=hl.text_start,
-                byte_end=hl.text_end,
-                created_at=hl.created_at,
-                updated_at=hl.updated_at,
-            )
-            for hl in highlights
-        ],
-        next_cursor=next_cursor,
-        has_more=has_more,
+    return DataEnvelope(
+        data=HighlightListResponse(
+            items=[
+                HighlightItem(
+                    id=to_api_id("highlight", hl.id),
+                    document_id=to_api_id("document", hl.media_id),
+                    byte_start=hl.text_start,
+                    byte_end=hl.text_end,
+                    created_at=hl.created_at,
+                    updated_at=hl.updated_at,
+                )
+                for hl in highlights
+            ],
+            next_cursor=next_cursor,
+            has_more=has_more,
+        )
     )

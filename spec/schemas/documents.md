@@ -36,7 +36,6 @@ CREATE TABLE documents (
   -- Canonical text
   canonical_text TEXT NOT NULL,
   canonical_hash TEXT NOT NULL,
-  canonical_version INTEGER NOT NULL DEFAULT 1,
   text_byte_length INTEGER NOT NULL,
   extractor_version TEXT NOT NULL,
 

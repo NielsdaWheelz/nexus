@@ -148,7 +148,6 @@ class TestForeignKeyConstraintViolations:
             quote="Test",
             prefix="",
             suffix="",
-            canonical_version=1,
         )
         db_session.add(highlight)
 

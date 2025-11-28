@@ -313,7 +313,7 @@ async def cancelJob(jobId):
 ```sql
 SELECT * FROM highlights
 WHERE media_type = :media_type AND media_id = :media_id
-  AND (canonical_version = :old_version OR transcript_hash = :old_version)
+  AND (transcript_hash = :old_version)
 FOR UPDATE
 ```
 
