@@ -124,7 +124,6 @@ def doc1(db_session: Session, user1: User) -> Document:
         content_hash="abc123",
         canonical_text=canonical,
         canonical_hash="def456",
-        canonical_version=1,
         text_byte_length=len(canonical.encode("utf-8")),
         extractor_version="1.0",
         structure={},
@@ -159,7 +158,6 @@ class TestCreateHighlight:
             media_id=doc1.id,
             anchor_type="text",
             **anchor,
-            canonical_version=1,
         )
 
         assert isinstance(result, HighlightSummary)
@@ -170,7 +168,6 @@ class TestCreateHighlight:
         assert result.text_start == anchor["text_start"]
         assert result.text_end == anchor["text_end"]
         assert result.quote == anchor["quote"]
-        assert result.canonical_version == 1
         assert result.color == "yellow"
         assert result.is_hidden is False
         assert result.is_detached is False
@@ -190,8 +187,7 @@ class TestCreateHighlight:
                 media_id=doc1.id,
                 anchor_type="text",
                 **anchor,
-                canonical_version=1,
-            )
+                )
         assert exc_info.value.code.value == "VALIDATION_ERROR"
         assert "quote" in str(exc_info.value.message).lower()
 
@@ -209,8 +205,7 @@ class TestCreateHighlight:
                 media_id=doc1.id,
                 anchor_type="text",
                 **anchor,
-                canonical_version=1,
-            )
+                )
         assert exc_info.value.code.value == "VALIDATION_ERROR"
         assert "prefix" in str(exc_info.value.message).lower()
 
@@ -228,8 +223,7 @@ class TestCreateHighlight:
                 media_id=doc1.id,
                 anchor_type="text",
                 **anchor,
-                canonical_version=1,
-            )
+                )
         assert exc_info.value.code.value == "VALIDATION_ERROR"
         assert "suffix" in str(exc_info.value.message).lower()
 
@@ -247,8 +241,7 @@ class TestCreateHighlight:
                 media_id=doc1.id,
                 anchor_type="text",
                 **anchor,
-                canonical_version=1,
-            )
+                )
         assert exc_info.value.code.value == "VALIDATION_ERROR"
 
     def test_create_highlight_end_before_start(
@@ -265,8 +258,7 @@ class TestCreateHighlight:
                 media_id=doc1.id,
                 anchor_type="text",
                 **anchor,
-                canonical_version=1,
-            )
+                )
         assert exc_info.value.code.value == "VALIDATION_ERROR"
 
     def test_create_highlight_offset_out_of_bounds(
@@ -284,8 +276,7 @@ class TestCreateHighlight:
                 media_id=doc1.id,
                 anchor_type="text",
                 **anchor,
-                canonical_version=1,
-            )
+                )
         assert exc_info.value.code.value == "VALIDATION_ERROR"
 
     def test_create_highlight_no_document_not_found(
@@ -301,8 +292,7 @@ class TestCreateHighlight:
                 media_id=uuid.uuid4(),  # Does not exist
                 anchor_type="text",
                 **anchor,
-                canonical_version=1,
-            )
+                )
 
     def test_create_highlight_document_not_owned(
         self, db_session: Session, user1: User, user2: User, doc1: Document
@@ -317,8 +307,7 @@ class TestCreateHighlight:
                 media_id=doc1.id,
                 anchor_type="text",
                 **anchor,
-                canonical_version=1,
-            )
+                )
 
     def test_create_highlight_deleted_document(
         self, db_session: Session, user1: User, doc1: Document
@@ -336,8 +325,7 @@ class TestCreateHighlight:
                 media_id=doc1.id,
                 anchor_type="text",
                 **anchor,
-                canonical_version=1,
-            )
+                )
 
     def test_create_highlight_pdf_anchor_valid(
         self, db_session: Session, user1: User, doc1: Document
@@ -354,7 +342,6 @@ class TestCreateHighlight:
             quote="page",
             prefix="",
             suffix=" text",
-            canonical_version=1,  # Documents require canonical_version not null
             pdf_page_number=1,
             pdf_char_offset=10,
             pdf_file_hash="pdf_hash_123",
@@ -428,24 +415,6 @@ class TestCreateHighlight:
                 pdf_file_hash=None,  # Missing
             )
 
-    def test_create_highlight_text_missing_canonical_version(
-        self, db_session: Session, user1: User, doc1: Document
-    ) -> None:
-        """Test creating text highlight without canonical_version fails."""
-        with pytest.raises(ValidationAppError):
-            create_highlight(
-                session=db_session,
-                user=user1,
-                media_type="document",
-                media_id=doc1.id,
-                anchor_type="text",
-                text_start=0,
-                text_end=5,
-                quote="This",
-                prefix="",
-                suffix=" is",
-                canonical_version=None,  # Missing
-            )
 
 
 # ============================================================================
@@ -468,7 +437,6 @@ class TestGetHighlight:
             media_id=doc1.id,
             anchor_type="text",
             **anchor,
-            canonical_version=1,
         )
 
         retrieved = get_highlight_for_user(
@@ -501,7 +469,6 @@ class TestGetHighlight:
             media_id=doc1.id,
             anchor_type="text",
             **anchor,
-            canonical_version=1,
         )
 
         with pytest.raises(NotFoundError):
@@ -521,7 +488,6 @@ class TestGetHighlight:
             media_id=doc1.id,
             anchor_type="text",
             **anchor,
-            canonical_version=1,
         )
 
         # Soft delete
@@ -570,7 +536,6 @@ class TestListHighlights:
             media_id=doc1.id,
             anchor_type="text",
             **anchor,
-            canonical_version=1,
         )
 
         result = list_highlights_for_document(
@@ -596,7 +561,6 @@ class TestListHighlights:
             media_id=doc1.id,
             anchor_type="text",
             **anchor1,
-            canonical_version=1,
         )
 
         anchor2 = make_highlight_anchor(doc1.canonical_text, "is")
@@ -607,7 +571,6 @@ class TestListHighlights:
             media_id=doc1.id,
             anchor_type="text",
             **anchor2,
-            canonical_version=1,
         )
 
         result = list_highlights_for_document(
@@ -636,8 +599,7 @@ class TestListHighlights:
                 media_id=doc1.id,
                 anchor_type="text",
                 **anchor,
-                canonical_version=1,
-            )
+                )
 
         # Fetch with limit 2
         result1 = list_highlights_for_document(
@@ -693,7 +655,6 @@ class TestListHighlights:
             media_id=doc1.id,
             anchor_type="text",
             **anchor1,
-            canonical_version=1,
         )
 
         anchor2 = make_highlight_anchor(doc1.canonical_text, "is")
@@ -704,7 +665,6 @@ class TestListHighlights:
             media_id=doc1.id,
             anchor_type="text",
             **anchor2,
-            canonical_version=1,
         )
 
         # Delete one
@@ -736,7 +696,6 @@ class TestListHighlights:
             media_id=doc1.id,
             anchor_type="text",
             **anchor,
-            canonical_version=1,
         )
 
         # user2 tries to list highlights on user1's document
@@ -768,7 +727,6 @@ class TestSoftDeleteHighlight:
             media_id=doc1.id,
             anchor_type="text",
             **anchor,
-            canonical_version=1,
         )
 
         result = soft_delete_highlight(
@@ -799,7 +757,6 @@ class TestSoftDeleteHighlight:
             media_id=doc1.id,
             anchor_type="text",
             **anchor,
-            canonical_version=1,
         )
 
         soft_delete_highlight(
@@ -838,7 +795,6 @@ class TestSoftDeleteHighlight:
             media_id=doc1.id,
             anchor_type="text",
             **anchor,
-            canonical_version=1,
         )
 
         with pytest.raises(NotFoundError):
@@ -869,7 +825,6 @@ class TestCreateAnnotation:
             media_id=doc1.id,
             anchor_type="text",
             **anchor,
-            canonical_version=1,
         )
 
         result = create_annotation(
@@ -897,7 +852,6 @@ class TestCreateAnnotation:
             media_id=doc1.id,
             anchor_type="text",
             **anchor,
-            canonical_version=1,
         )
 
         with pytest.raises(ValidationAppError):
@@ -920,7 +874,6 @@ class TestCreateAnnotation:
             media_id=doc1.id,
             anchor_type="text",
             **anchor,
-            canonical_version=1,
         )
 
         with pytest.raises(ValidationAppError):
@@ -953,7 +906,6 @@ class TestCreateAnnotation:
             media_id=doc1.id,
             anchor_type="text",
             **anchor,
-            canonical_version=1,
         )
 
         with pytest.raises(NotFoundError):
@@ -976,7 +928,6 @@ class TestCreateAnnotation:
             media_id=doc1.id,
             anchor_type="text",
             **anchor,
-            canonical_version=1,
         )
 
         soft_delete_highlight(
@@ -1012,7 +963,6 @@ class TestListAnnotations:
             media_id=doc1.id,
             anchor_type="text",
             **anchor,
-            canonical_version=1,
         )
 
         result = list_annotations_for_highlight(
@@ -1037,7 +987,6 @@ class TestListAnnotations:
             media_id=doc1.id,
             anchor_type="text",
             **anchor,
-            canonical_version=1,
         )
 
         ann = create_annotation(
@@ -1069,7 +1018,6 @@ class TestListAnnotations:
             media_id=doc1.id,
             anchor_type="text",
             **anchor,
-            canonical_version=1,
         )
 
         ann1 = create_annotation(
@@ -1110,7 +1058,6 @@ class TestListAnnotations:
             media_id=doc1.id,
             anchor_type="text",
             **anchor,
-            canonical_version=1,
         )
 
         # Create 3 annotations
@@ -1160,7 +1107,6 @@ class TestListAnnotations:
             media_id=doc1.id,
             anchor_type="text",
             **anchor,
-            canonical_version=1,
         )
 
         ann1 = create_annotation(
@@ -1222,7 +1168,6 @@ class TestSoftDeleteAnnotation:
             media_id=doc1.id,
             anchor_type="text",
             **anchor,
-            canonical_version=1,
         )
 
         ann = create_annotation(
@@ -1261,7 +1206,6 @@ class TestSoftDeleteAnnotation:
             media_id=doc1.id,
             anchor_type="text",
             **anchor,
-            canonical_version=1,
         )
 
         ann = create_annotation(
@@ -1306,7 +1250,6 @@ class TestSoftDeleteAnnotation:
             media_id=doc1.id,
             anchor_type="text",
             **anchor,
-            canonical_version=1,
         )
 
         ann = create_annotation(
@@ -1346,8 +1289,7 @@ class TestDeterministicOrdering:
                 media_id=doc1.id,
                 anchor_type="text",
                 **anchor,
-                canonical_version=1,
-            )
+                )
             ids.append(hl.id)
 
         # Fetch twice and verify same order
@@ -1381,7 +1323,6 @@ class TestDeterministicOrdering:
             media_id=doc1.id,
             anchor_type="text",
             **anchor,
-            canonical_version=1,
         )
 
         for _ in range(3):

@@ -23,6 +23,7 @@ from app.core.ids import from_api_id, to_api_id
 from app.core.pagination import PaginationParams
 from app.db.session import get_session as _get_session
 from app.models.user import User
+from app.schemas.common import DataEnvelope
 from app.schemas.documents import DocumentListItem, DocumentListResponse, DocumentUploadResponse
 from app.schemas.readers import ReaderListResponse, ReaderResponse
 from app.services.documents import create_document_placeholder, list_documents_for_user
@@ -36,7 +37,7 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 
 @router.post(
     "",
-    response_model=DocumentUploadResponse,
+    response_model=DataEnvelope[DocumentUploadResponse],
     status_code=201,
     summary="Upload document",
     description="Upload a document file and create a placeholder for ingestion.",
@@ -47,7 +48,7 @@ async def upload_document(
     file: UploadFile = File(...),
     source_kind: str = Form(...),
     title: str | None = Form(None),
-) -> DocumentUploadResponse:
+) -> DataEnvelope[DocumentUploadResponse]:
     """Upload a document file and create a placeholder.
 
     Accepts multipart/form-data with:
@@ -146,18 +147,20 @@ async def upload_document(
     )
 
     # Convert to typed ID response
-    return DocumentUploadResponse(
-        id=to_api_id("document", doc.id),
-        title=doc.title,
-        source_kind=source_kind,  # type: ignore
-        created_at=doc.created_at,
-        updated_at=doc.updated_at,
+    return DataEnvelope(
+        data=DocumentUploadResponse(
+            id=to_api_id("document", doc.id),
+            title=doc.title,
+            source_kind=source_kind,  # type: ignore
+            created_at=doc.created_at,
+            updated_at=doc.updated_at,
+        )
     )
 
 
 @router.get(
     "",
-    response_model=DocumentListResponse,
+    response_model=DataEnvelope[DocumentListResponse],
     status_code=200,
     summary="List user's documents",
     description="Retrieve paginated list of authenticated user's documents.",
@@ -170,7 +173,7 @@ async def list_documents(
         default=None,
         description="Optional status filter (pending, processing, ready, failed)",
     ),
-) -> DocumentListResponse:
+) -> DataEnvelope[DocumentListResponse]:
     """List user's documents with cursor pagination and optional status filter.
 
     Retrieves all documents owned by the authenticated user, ordered by
@@ -239,16 +242,18 @@ async def list_documents(
         for item in result.items
     ]
 
-    return DocumentListResponse(
-        items=items,
-        next_cursor=result.next_cursor,
-        has_more=result.has_more,
+    return DataEnvelope(
+        data=DocumentListResponse(
+            items=items,
+            next_cursor=result.next_cursor,
+            has_more=result.has_more,
+        )
     )
 
 
 @router.get(
     "/{document_id}",
-    response_model=DocumentListItem,
+    response_model=DataEnvelope[DocumentListItem],
     status_code=200,
     summary="Get document detail",
     description="Retrieve a single document by ID with full metadata.",
@@ -257,7 +262,7 @@ async def get_document(
     document_id: str,
     current_user: Annotated[User, Depends(rate_limit_authenticated)],
     session: Annotated[Session, Depends(_get_session)],
-) -> DocumentListItem:
+) -> DataEnvelope[DocumentListItem]:
     """Get a single document by ID.
 
     Path Parameters:
@@ -315,19 +320,21 @@ async def get_document(
     )
 
     # Convert to API response with typed ID
-    return DocumentListItem(
-        id=to_api_id("document", doc.id),
-        title=doc.title,
-        source_kind=_mime_to_source_kind(doc.original_mime_type),  # type: ignore
-        processing_status=doc.status,  # type: ignore
-        created_at=doc.created_at,
-        updated_at=doc.updated_at,
+    return DataEnvelope(
+        data=DocumentListItem(
+            id=to_api_id("document", doc.id),
+            title=doc.title,
+            source_kind=_mime_to_source_kind(doc.original_mime_type),  # type: ignore
+            processing_status=doc.status,  # type: ignore
+            created_at=doc.created_at,
+            updated_at=doc.updated_at,
+        )
     )
 
 
 @router.get(
     "/{document_id}/readers",
-    response_model=ReaderListResponse,
+    response_model=DataEnvelope[ReaderListResponse],
     summary="List readers for document",
     description="List all reading sessions for a document with cursor pagination.",
 )
@@ -336,7 +343,7 @@ def list_document_readers(
     current_user: Annotated[User, Depends(rate_limit_authenticated)],
     session: Annotated[Session, Depends(_get_session)],
     pagination: PaginationParams = Depends(),
-) -> ReaderListResponse:
+) -> DataEnvelope[ReaderListResponse]:
     """List readers for a document with pagination.
 
     Only the document owner can see readers for their document.
@@ -418,8 +425,10 @@ def list_document_readers(
         for item in result.items
     ]
 
-    return ReaderListResponse(
-        items=items,
-        next_cursor=result.next_cursor,
-        has_more=result.has_more,
+    return DataEnvelope(
+        data=ReaderListResponse(
+            items=items,
+            next_cursor=result.next_cursor,
+            has_more=result.has_more,
+        )
     )

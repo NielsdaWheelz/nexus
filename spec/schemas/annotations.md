@@ -24,7 +24,6 @@ CREATE TABLE highlights (
   suffix TEXT NOT NULL,
 
   -- Version anchor (immutable)
-  canonical_version INTEGER,
   transcript_hash TEXT,
 
   -- PDF-specific anchoring (for anchor_type='pdf')
@@ -55,8 +54,8 @@ CREATE TABLE highlights (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
   CONSTRAINT highlight_version_anchor CHECK (
-    (media_type = 'document' AND canonical_version IS NOT NULL AND transcript_hash IS NULL) OR
-    (media_type IN ('episode', 'video') AND transcript_hash IS NOT NULL AND canonical_version IS NULL)
+    (media_type = 'document' AND transcript_hash IS NULL) OR
+    (media_type IN ('episode', 'video') AND transcript_hash IS NOT NULL)
   ),
 
   CONSTRAINT highlight_anchor_type_validity CHECK (

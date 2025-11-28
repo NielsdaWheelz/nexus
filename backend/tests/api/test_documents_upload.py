@@ -123,7 +123,7 @@ class TestUploadDocumentHappyPath:
         if response.status_code != 201:
             print(f"DEBUG: Response status={response.status_code}, body={response.text}")
         assert response.status_code == 201
-        result = response.json()
+        result = response.json()["data"]
 
         # Verify response shape
         assert "id" in result
@@ -167,7 +167,7 @@ class TestUploadDocumentHappyPath:
         response = client_authenticated.post("/documents", files=files, data=data)
 
         assert response.status_code == 201
-        result = response.json()
+        result = response.json()["data"]
 
         # Title should be explicit override
         assert result["title"] == "My Custom Title"
@@ -188,7 +188,7 @@ class TestUploadDocumentHappyPath:
         response = client_authenticated.post("/documents", files=files, data=data)
 
         assert response.status_code == 201
-        result = response.json()
+        result = response.json()["data"]
         assert result["source_kind"] == "epub"
         assert result["title"] == "book.epub"
 
@@ -203,7 +203,7 @@ class TestUploadDocumentHappyPath:
         response = client_authenticated.post("/documents", files=files, data=data)
 
         assert response.status_code == 201
-        result = response.json()
+        result = response.json()["data"]
         assert result["source_kind"] == "html"
         assert result["title"] == "page.html"
 
@@ -376,7 +376,7 @@ class TestUploadDocumentResponseEnvelope:
         response = client_authenticated.post("/documents", files=files, data=data)
 
         assert response.status_code == 201
-        result = response.json()
+        result = response.json()["data"]
 
         # Should NOT have error envelope (direct response, no ok field)
         # Per spec, successful responses are direct, not wrapped in ok/error
@@ -426,7 +426,7 @@ class TestUploadDocumentDBIntegration:
 
         response = client_authenticated.post("/documents", files=files, data=data)
         assert response.status_code == 201
-        result = response.json()
+        result = response.json()["data"]
 
         # Try parsing timestamps
         from datetime import datetime

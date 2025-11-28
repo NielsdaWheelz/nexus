@@ -20,21 +20,15 @@ from pydantic import BaseModel, Field, field_validator
 class CreateAnnotationRequest(BaseModel):
     """Request body for POST /annotations.
 
-    Accepts exactly one of highlight_id or chunk_id (mutually exclusive).
+    Annotations attach only to highlights (user-selected text spans), never to chunks.
+    Chunks are purely for retrieval and embeddings; they are not annotation targets.
 
     Attributes:
-        highlight_id: Optional typed highlight ID (hl_<uuid>)
-        chunk_id: Optional typed chunk ID (chunk_<uuid>)
+        highlight_id: Typed highlight ID (hl_<uuid>) (required)
         content: The annotation text (required, non-empty after stripping)
     """
 
-    highlight_id: Optional[str] = Field(
-        default=None, description="Typed highlight ID (hl_<uuid>), mutually exclusive with chunk_id"
-    )
-    chunk_id: Optional[str] = Field(
-        default=None,
-        description="Typed chunk ID (chunk_<uuid>), mutually exclusive with highlight_id",
-    )
+    highlight_id: str = Field(description="Typed highlight ID (hl_<uuid>) (required)")
     content: str = Field(description="Annotation text content (required, non-empty)")
 
     @field_validator("content")
@@ -44,17 +38,6 @@ class CreateAnnotationRequest(BaseModel):
         if not v or not v.strip():
             raise ValueError("content must be non-empty")
         return v.strip()
-
-    @field_validator("chunk_id")
-    @classmethod
-    def validate_mutually_exclusive(cls, v: Optional[str], info) -> Optional[str]:
-        """Ensure exactly one of highlight_id or chunk_id is provided."""
-        highlight_id = info.data.get("highlight_id")
-        if highlight_id and v:
-            raise ValueError("Cannot provide both highlight_id and chunk_id")
-        if not highlight_id and not v:
-            raise ValueError("Must provide either highlight_id or chunk_id")
-        return v
 
 
 class UpdateAnnotationRequest(BaseModel):
@@ -78,14 +61,14 @@ class UpdateAnnotationRequest(BaseModel):
 class AnnotationItem(BaseModel):
     """API response item for a single annotation (used in list responses).
 
-    All IDs are typed (e.g., ann_<uuid>, hl_<uuid>, chunk_<uuid>).
+    All IDs are typed (e.g., ann_<uuid>, hl_<uuid>, doc_<uuid>).
+    Annotations always attach to highlights, never to chunks.
 
     Attributes:
         id: Typed annotation ID (ann_<uuid>)
         user_id: Typed user ID (usr_<uuid>)
-        document_id: Typed document ID (doc_<uuid>)
-        highlight_id: Optional typed highlight ID (hl_<uuid>)
-        chunk_id: Optional typed chunk ID (chunk_<uuid>)
+        document_id: Typed document ID (doc_<uuid>) (derived from highlight)
+        highlight_id: Typed highlight ID (hl_<uuid>) (required)
         content: The annotation text
         created_at: UTC timestamp of creation
         updated_at: UTC timestamp of last update
@@ -94,12 +77,7 @@ class AnnotationItem(BaseModel):
     id: str = Field(description="Typed annotation ID (ann_<uuid>)")
     user_id: str = Field(description="Typed user ID (usr_<uuid>)")
     document_id: str = Field(description="Typed document ID (doc_<uuid>)")
-    highlight_id: Optional[str] = Field(
-        default=None, description="Typed highlight ID (hl_<uuid>), if attached to highlight"
-    )
-    chunk_id: Optional[str] = Field(
-        default=None, description="Typed chunk ID (chunk_<uuid>), if attached to chunk"
-    )
+    highlight_id: str = Field(description="Typed highlight ID (hl_<uuid>) (required)")
     content: str = Field(description="Annotation text content")
     created_at: datetime = Field(description="UTC timestamp of creation")
     updated_at: datetime = Field(description="UTC timestamp of last update")

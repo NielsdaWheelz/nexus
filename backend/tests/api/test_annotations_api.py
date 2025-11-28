@@ -1,7 +1,7 @@
 """Comprehensive tests for annotations API endpoints.
 
 Tests cover:
-- POST /annotations: Create annotation on highlight or chunk
+- POST /annotations: Create annotation on highlight
 - PATCH /annotations/{annotation_id}: Update annotation content
 - DELETE /annotations/{annotation_id}: Soft-delete annotation
 - GET /documents/{document_id}/annotations: List annotations on a document
@@ -23,7 +23,6 @@ from sqlalchemy.orm import Session
 
 from app.core.ids import from_api_id, to_api_id
 from app.models.annotation import Annotation
-from app.models.chunk import ContentChunk
 from app.models.document import Document
 from app.models.highlight import Highlight
 from app.models.user import User
@@ -67,7 +66,6 @@ def test_document(db_session: Session, authenticated_user: User) -> Document:
         content_hash="abc123",
         canonical_text="The quick brown fox jumps over the lazy dog. This is a test document with some content.",
         canonical_hash="def456",
-        canonical_version=1,
         text_byte_length=85,
         extractor_version="1.0",
         status="ready",
@@ -89,7 +87,6 @@ def other_user_document(db_session: Session, other_user: User) -> Document:
         content_hash="xyz789",
         canonical_text="Some other content that the authenticated user should not access.",
         canonical_hash="uvw456",
-        canonical_version=1,
         text_byte_length=65,
         extractor_version="1.0",
         status="ready",
@@ -114,7 +111,6 @@ def test_highlight(
         quote="quick brown fox",
         prefix="The ",
         suffix=" jum",
-        canonical_version=1,
     )
     db_session.add(hl)
     db_session.flush()
@@ -136,31 +132,10 @@ def other_user_highlight(
         quote="Some other",
         prefix="",
         suffix=" con",
-        canonical_version=1,
     )
     db_session.add(hl)
     db_session.flush()
     return hl
-
-
-@pytest.fixture
-def test_chunk(
-    db_session: Session, authenticated_user: User, test_document: Document
-) -> ContentChunk:
-    """Create a test content chunk on test_document."""
-    chunk = ContentChunk(
-        media_type="document",
-        media_id=test_document.id,
-        chunk_version="v1",
-        embedding_model="text-embedding-3-small",
-        text_start=0,
-        text_end=50,
-        text="The quick brown fox jumps over the lazy dog.",
-        chunk_metadata={},
-    )
-    db_session.add(chunk)
-    db_session.flush()
-    return chunk
 
 
 @pytest.fixture
@@ -207,11 +182,10 @@ class TestCreateAnnotation:
         )
 
         assert response.status_code == 201
-        data = response.json()
+        data = response.json()["data"]
         assert data["id"].startswith("ann_")
         assert data["user_id"] == to_api_id("user", authenticated_user.id)
         assert data["highlight_id"] == hl_typed_id
-        assert data["chunk_id"] is None
         assert data["content"] == "This is a great quote about foxes!"
         assert data["created_at"] is not None
         assert data["updated_at"] is not None
@@ -223,70 +197,14 @@ class TestCreateAnnotation:
         assert annotation is not None
         assert annotation.user_id == authenticated_user.id
         assert annotation.highlight_id == test_highlight.id
-        assert annotation.chunk_id is None
         assert annotation.content == "This is a great quote about foxes!"
         assert annotation.deleted_at is None
 
-    def test_happy_path_on_chunk(
-        self,
-        client_authenticated: TestClient,
-        db_session: Session,
-        authenticated_user: User,
-        test_chunk: ContentChunk,
-    ):
-        """Test successful annotation creation on a chunk."""
-        chunk_typed_id = to_api_id("chunk", test_chunk.id)
-
-        response = client_authenticated.post(
-            "/annotations",
-            json={
-                "chunk_id": chunk_typed_id,
-                "content": "Interesting passage about animals.",
-            },
-        )
-
-        assert response.status_code == 201
-        data = response.json()
-        assert data["id"].startswith("ann_")
-        assert data["highlight_id"] is None
-        assert data["chunk_id"] == chunk_typed_id
-        assert data["content"] == "Interesting passage about animals."
-
-        # Verify stored in DB
-        ann_type, ann_id = from_api_id(data["id"])
-        annotation = db_session.query(Annotation).filter(Annotation.id == ann_id).first()
-        assert annotation is not None
-        assert annotation.chunk_id == test_chunk.id
-        assert annotation.highlight_id is None
-
-    def test_both_highlight_and_chunk_provided(
-        self,
-        client_authenticated: TestClient,
-        test_highlight: Highlight,
-        test_chunk: ContentChunk,
-    ):
-        """Test that providing both highlight_id and chunk_id returns 422."""
-        hl_typed_id = to_api_id("highlight", test_highlight.id)
-        chunk_typed_id = to_api_id("chunk", test_chunk.id)
-
-        response = client_authenticated.post(
-            "/annotations",
-            json={
-                "highlight_id": hl_typed_id,
-                "chunk_id": chunk_typed_id,
-                "content": "This should fail",
-            },
-        )
-
-        assert response.status_code == 422
-        data = response.json()
-        assert data["error"]["code"] == "VALIDATION_ERROR"
-
-    def test_neither_highlight_nor_chunk_provided(
+    def test_no_highlight_provided(
         self,
         client_authenticated: TestClient,
     ):
-        """Test that providing neither highlight_id nor chunk_id returns 422."""
+        """Test that providing no highlight_id returns 422."""
         response = client_authenticated.post(
             "/annotations",
             json={
@@ -389,23 +307,6 @@ class TestCreateAnnotation:
         data = response.json()
         assert data["error"]["code"] == "NOT_FOUND"
 
-    def test_chunk_not_found(self, client_authenticated: TestClient):
-        """Test that non-existent chunk returns 404."""
-        fake_chunk_id = to_api_id("chunk", uuid4())
-
-        response = client_authenticated.post(
-            "/annotations",
-            json={
-                "chunk_id": fake_chunk_id,
-                "content": "Some content",
-            },
-        )
-
-        assert response.status_code == 404
-        data = response.json()
-        assert data["error"]["code"] == "NOT_FOUND"
-        assert data["error"]["details"]["resource_type"] == "chunk"
-
     def test_unauthenticated_returns_401(self, client: TestClient, test_highlight: Highlight):
         """Test that unauthenticated request returns 401."""
         hl_typed_id = to_api_id("highlight", test_highlight.id)
@@ -453,7 +354,7 @@ class TestUpdateAnnotation:
         )
 
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         assert data["id"] == ann_typed_id
         assert data["content"] == "Updated content"
         assert data["updated_at"] is not None
@@ -781,7 +682,7 @@ class TestListDocumentAnnotations:
         response = client_authenticated.get(f"/documents/{doc_typed_id}/annotations")
 
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         assert len(data["items"]) == 2
         assert data["has_more"] is False
         assert data["next_cursor"] is None
@@ -801,7 +702,7 @@ class TestListDocumentAnnotations:
         response = client_authenticated.get(f"/documents/{doc_typed_id}/annotations")
 
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         assert len(data["items"]) == 0
         assert data["has_more"] is False
         assert data["next_cursor"] is None
@@ -833,7 +734,7 @@ class TestListDocumentAnnotations:
             params={"limit": 2},
         )
         assert response1.status_code == 200
-        data1 = response1.json()
+        data1 = response1.json()["data"]
         assert len(data1["items"]) == 2
         assert data1["has_more"] is True
         assert data1["next_cursor"] is not None
@@ -844,7 +745,7 @@ class TestListDocumentAnnotations:
             params={"limit": 2, "cursor": data1["next_cursor"]},
         )
         assert response2.status_code == 200
-        data2 = response2.json()
+        data2 = response2.json()["data"]
         assert len(data2["items"]) == 1
         assert data2["has_more"] is False
 
@@ -884,7 +785,7 @@ class TestListDocumentAnnotations:
         response = client_authenticated.get(f"/documents/{doc_typed_id}/annotations")
 
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         # Should only see active annotation
         assert len(data["items"]) == 1
         assert data["items"][0]["content"] == "Active annotation"
@@ -948,7 +849,7 @@ class TestListHighlightAnnotations:
         response = client_authenticated.get(f"/highlights/{hl_typed_id}/annotations")
 
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         assert len(data["items"]) == 2
         assert all(item["highlight_id"] == hl_typed_id for item in data["items"])
         assert data["has_more"] is False
@@ -964,7 +865,7 @@ class TestListHighlightAnnotations:
         response = client_authenticated.get(f"/highlights/{hl_typed_id}/annotations")
 
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         assert len(data["items"]) == 0
         assert data["has_more"] is False
 
@@ -994,7 +895,7 @@ class TestListHighlightAnnotations:
             params={"limit": 2},
         )
         assert response1.status_code == 200
-        data1 = response1.json()
+        data1 = response1.json()["data"]
         assert len(data1["items"]) == 2
         assert data1["has_more"] is True
 
@@ -1004,7 +905,7 @@ class TestListHighlightAnnotations:
             params={"limit": 2, "cursor": data1["next_cursor"]},
         )
         assert response2.status_code == 200
-        data2 = response2.json()
+        data2 = response2.json()["data"]
         assert len(data2["items"]) == 1
         assert data2["has_more"] is False
 
@@ -1061,7 +962,7 @@ class TestListUserAnnotations:
         response = client_authenticated.get(f"/users/{user_typed_id}/annotations")
 
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         assert len(data["items"]) == 1
         assert data["items"][0]["id"].startswith("ann_")
         assert data["has_more"] is False
@@ -1077,7 +978,7 @@ class TestListUserAnnotations:
         response = client_authenticated.get(f"/users/{user_typed_id}/annotations")
 
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         assert len(data["items"]) == 0
         assert data["has_more"] is False
 
@@ -1107,7 +1008,7 @@ class TestListUserAnnotations:
             params={"limit": 2},
         )
         assert response1.status_code == 200
-        data1 = response1.json()
+        data1 = response1.json()["data"]
         assert len(data1["items"]) == 2
         assert data1["has_more"] is True
 
@@ -1117,7 +1018,7 @@ class TestListUserAnnotations:
             params={"limit": 2, "cursor": data1["next_cursor"]},
         )
         assert response2.status_code == 200
-        data2 = response2.json()
+        data2 = response2.json()["data"]
         assert len(data2["items"]) == 1
         assert data2["has_more"] is False
 

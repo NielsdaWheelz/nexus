@@ -278,7 +278,6 @@ def create_highlight(
     quote: str,
     prefix: str,
     suffix: str,
-    canonical_version: Optional[int] = None,
     transcript_hash: Optional[str] = None,
     pdf_page_number: Optional[int] = None,
     pdf_char_offset: Optional[int] = None,
@@ -290,7 +289,8 @@ def create_highlight(
     """Create a highlight with anchor validation.
 
     For text anchors (documents), validates that quote/prefix/suffix match the
-    canonical text at the given byte offsets.
+    canonical text at the given byte offsets. Text anchors use byte offsets and
+    hash-based anchoring (no integer versions).
 
     For PDF anchors, performs minimal validation (field existence) as full
     validation requires PDF extraction at API layer.
@@ -308,7 +308,6 @@ def create_highlight(
         quote: The exact text of the highlight
         prefix: Context before the quote (up to 64 bytes)
         suffix: Context after the quote (up to 64 bytes)
-        canonical_version: Version of canonical text (documents only)
         transcript_hash: SHA256 of transcript (episodes/videos only)
         pdf_page_number: Page number in PDF (PDF anchors only)
         pdf_char_offset: Character offset within page (PDF anchors only)
@@ -363,11 +362,8 @@ def create_highlight(
 
     # Validate anchor type specific fields
     if anchor_type == "text":
-        if canonical_version is None:
-            raise ValidationAppError(
-                message="canonical_version is required for text anchors",
-                details={"field": "canonical_version"},
-            )
+        # Text anchors use byte offsets into canonical text (hash-based, no version)
+        pass
     elif anchor_type == "pdf":
         _validate_pdf_anchor(
             pdf_page_number=pdf_page_number,
@@ -403,7 +399,6 @@ def create_highlight(
         quote=quote,
         prefix=prefix,
         suffix=suffix,
-        canonical_version=canonical_version,
         transcript_hash=transcript_hash,
         pdf_page_number=pdf_page_number,
         pdf_char_offset=pdf_char_offset,
@@ -433,7 +428,6 @@ def create_highlight(
         quote=highlight.quote,
         prefix=highlight.prefix,
         suffix=highlight.suffix,
-        canonical_version=highlight.canonical_version,
         transcript_hash=highlight.transcript_hash,
         pdf_page_number=highlight.pdf_page_number,
         pdf_char_offset=highlight.pdf_char_offset,
@@ -506,7 +500,6 @@ def get_highlight_for_user(
         quote=hl.quote,
         prefix=hl.prefix,
         suffix=hl.suffix,
-        canonical_version=hl.canonical_version,
         transcript_hash=hl.transcript_hash,
         pdf_page_number=hl.pdf_page_number,
         pdf_char_offset=hl.pdf_char_offset,
@@ -651,7 +644,6 @@ def list_highlights_for_document(
             quote=hl.quote,
             prefix=hl.prefix,
             suffix=hl.suffix,
-            canonical_version=hl.canonical_version,
             transcript_hash=hl.transcript_hash,
             pdf_page_number=hl.pdf_page_number,
             pdf_char_offset=hl.pdf_char_offset,
@@ -737,118 +729,70 @@ def create_annotation(
     *,
     session: Session,
     user: User,
-    highlight_id: Optional[UUID] = None,
-    chunk_id: Optional[UUID] = None,
+    highlight_id: UUID,
     content: str = "",
 ) -> AnnotationSummary:
-    """Create an annotation on a highlight or chunk.
+    """Create an annotation on a highlight.
+
+    Annotations attach only to highlights (user-selected text spans), never to chunks.
+    Chunks are purely for retrieval and embeddings; they are not annotation targets.
 
     This function enforces:
-    1. Exactly one of highlight_id or chunk_id is provided
-    2. Highlight/chunk exists and belongs to user (or is accessible)
-    3. Highlight/chunk is not soft-deleted
+    1. highlight_id is provided and valid
+    2. Highlight exists and belongs to user
+    3. Highlight is not soft-deleted
     4. Annotation content is non-empty
 
     Args:
         session: SQLAlchemy database session
         user: Authenticated user (annotation creator)
-        highlight_id: Optional raw UUID of the highlight
-        chunk_id: Optional raw UUID of the chunk
+        highlight_id: Required raw UUID of the highlight
         content: The annotation text
 
     Returns:
         AnnotationSummary with the created annotation
 
     Raises:
-        NotFoundError: If highlight/chunk doesn't exist, is not accessible to user, or is deleted
-        ValidationAppError: If content is empty or both/neither highlight_id/chunk_id provided
+        NotFoundError: If highlight doesn't exist, is not accessible to user, or is deleted
+        ValidationAppError: If content is empty
     """
-    # Validate exactly one of highlight_id or chunk_id is provided
+    # Validate content is non-empty
     if not content or not content.strip():
         raise ValidationAppError(
             message="Annotation content cannot be empty",
             details={"field": "content"},
         )
 
-    if (highlight_id is None and chunk_id is None) or (
-        highlight_id is not None and chunk_id is not None
-    ):
-        raise ValidationAppError(
-            message="Must provide exactly one of highlight_id or chunk_id",
-            details={"fields": ["highlight_id", "chunk_id"]},
-        )
-
     document_id = None
 
-    # Verify highlight/chunk exists and is accessible to user
-    if highlight_id is not None:
-        hl = (
-            session.query(Highlight)
-            .filter(
-                and_(
-                    Highlight.id == highlight_id,
-                    Highlight.user_id == user.id,
-                    Highlight.deleted_at.is_(None),
-                )
+    # Verify highlight exists and is accessible to user
+    hl = (
+        session.query(Highlight)
+        .filter(
+            and_(
+                Highlight.id == highlight_id,
+                Highlight.user_id == user.id,
+                Highlight.deleted_at.is_(None),
             )
-            .first()
+        )
+        .first()
+    )
+
+    if not hl:
+        raise NotFoundError(
+            message="Highlight not found",
+            details={"resource_type": "highlight"},
         )
 
-        if not hl:
-            raise NotFoundError(
-                message="Highlight not found",
-                details={"resource_type": "highlight"},
-            )
-
-        # Get document_id from highlight for document-level queries
-        if hl.media_type == "document":
-            document_id = hl.media_id
-    else:
-        # chunk_id is not None
-        from app.models.chunk import ContentChunk
-
-        chunk = session.query(ContentChunk).filter(ContentChunk.id == chunk_id).first()
-
-        if not chunk:
-            raise NotFoundError(
-                message="Chunk not found",
-                details={"resource_type": "chunk"},
-            )
-
-        # ACL: Verify chunk's document belongs to user
-        if chunk.media_type == "document":
-            doc = (
-                session.query(Document)
-                .filter(
-                    and_(
-                        Document.id == chunk.media_id,
-                        Document.user_id == user.id,
-                        Document.deleted_at.is_(None),
-                    )
-                )
-                .first()
-            )
-
-            if not doc:
-                raise NotFoundError(
-                    message="Chunk not found",
-                    details={"resource_type": "chunk"},
-                )
-
-            document_id = chunk.media_id
-        else:
-            # Phase 1: only documents supported
-            raise NotFoundError(
-                message="Chunk not found",
-                details={"resource_type": "chunk"},
-            )
+    # Get document_id from highlight for document-level queries
+    if hl.media_type == "document":
+        document_id = hl.media_id
 
     # Create annotation
     now = datetime.now(timezone.utc)
     annotation = Annotation(
         user_id=user.id,
         highlight_id=highlight_id,
-        chunk_id=chunk_id,
         content=content.strip(),
         is_public=False,
         created_at=now,
@@ -862,7 +806,6 @@ def create_annotation(
         id=annotation.id,
         user_id=annotation.user_id,
         highlight_id=annotation.highlight_id,
-        chunk_id=annotation.chunk_id,
         document_id=document_id,
         content=annotation.content,
         is_public=annotation.is_public,
@@ -1038,18 +981,11 @@ def get_annotation_for_user(
         hl = session.query(Highlight).filter(Highlight.id == ann.highlight_id).first()
         if hl and hl.media_type == "document":
             document_id = hl.media_id
-    elif ann.chunk_id is not None:
-        from app.models.chunk import ContentChunk
-
-        chunk = session.query(ContentChunk).filter(ContentChunk.id == ann.chunk_id).first()
-        if chunk and chunk.media_type == "document":
-            document_id = chunk.media_id
 
     return AnnotationSummary(
         id=ann.id,
         user_id=ann.user_id,
         highlight_id=ann.highlight_id,
-        chunk_id=ann.chunk_id,
         document_id=document_id,
         content=ann.content,
         is_public=ann.is_public,
@@ -1120,18 +1056,11 @@ def update_annotation(
         hl = session.query(Highlight).filter(Highlight.id == ann.highlight_id).first()
         if hl and hl.media_type == "document":
             document_id = hl.media_id
-    elif ann.chunk_id is not None:
-        from app.models.chunk import ContentChunk
-
-        chunk = session.query(ContentChunk).filter(ContentChunk.id == ann.chunk_id).first()
-        if chunk and chunk.media_type == "document":
-            document_id = chunk.media_id
 
     return AnnotationSummary(
         id=ann.id,
         user_id=ann.user_id,
         highlight_id=ann.highlight_id,
-        chunk_id=ann.chunk_id,
         document_id=document_id,
         content=ann.content,
         is_public=ann.is_public,
@@ -1265,16 +1194,9 @@ def list_annotations_for_document(
         Highlight.media_id == document_id,
     )
 
-    chunk_doc_filter = and_(
-        Annotation.chunk_id.isnot(None),
-        ContentChunk.media_type == "document",
-        ContentChunk.media_id == document_id,
-    )
-
     query = (
         query.outerjoin(Highlight, Annotation.highlight_id == Highlight.id)
-        .outerjoin(ContentChunk, Annotation.chunk_id == ContentChunk.id)
-        .filter(or_(highlight_doc_filter, chunk_doc_filter))
+        .filter(highlight_doc_filter)
     )
 
     # Apply cursor filtering (keyset pagination)
@@ -1316,7 +1238,6 @@ def list_annotations_for_document(
             id=ann.id,
             user_id=ann.user_id,
             highlight_id=ann.highlight_id,
-            chunk_id=ann.chunk_id,
             document_id=document_id,
             content=ann.content,
             is_public=ann.is_public,
@@ -1413,17 +1334,12 @@ def list_annotations_for_user(
             hl = session.query(Highlight).filter(Highlight.id == ann.highlight_id).first()
             if hl and hl.media_type == "document":
                 document_id = hl.media_id
-        elif ann.chunk_id is not None:
-            chunk = session.query(ContentChunk).filter(ContentChunk.id == ann.chunk_id).first()
-            if chunk and chunk.media_type == "document":
-                document_id = chunk.media_id
 
         items.append(
             AnnotationSummary(
                 id=ann.id,
                 user_id=ann.user_id,
                 highlight_id=ann.highlight_id,
-                chunk_id=ann.chunk_id,
                 document_id=document_id,
                 content=ann.content,
                 is_public=ann.is_public,

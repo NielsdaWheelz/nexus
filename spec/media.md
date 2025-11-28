@@ -12,7 +12,7 @@ Digital documents extracted to linear canonical text via deterministic rules:
 - **Canonical form**: UTF-8 text with stable byte offsets
 - **Structure**: Extracted chapters, sections, headings
 - **Highlighting**: Via byte offsets (text anchors for EPUB/HTML) or pdf.js offsets (PDFs)
-- **Versioning**: `canonical_version` counter, `extractor_version` string
+- **Versioning**: `hash`, `extractor_version` string
 
 ### 1.2 Episodes (Podcasts with Transcripts)
 

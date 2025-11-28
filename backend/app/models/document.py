@@ -41,10 +41,10 @@ class Document(Base):
     Canonical text (immutable after creation):
     - content_hash: SHA256 of the original blob (for change detection)
     - canonical_text: Deterministic UTF-8 text extraction from original
-    - canonical_hash: SHA256 of canonical_text
-    - canonical_version: Version of extraction logic used
+    - canonical_hash: SHA256 of canonical_text (hash-based remap semantics, no integer version)
     - text_byte_length: Length of canonical_text in bytes
     - extractor_version: Version string of extraction tool
+    - Note: canonical_version is deprecated and removed from ORM; future DB migration can drop it
 
     Structure and metadata:
     - structure: JSONB with document structure (sections, pages, etc.)
@@ -92,7 +92,6 @@ class Document(Base):
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)  # SHA256
     canonical_text: Mapped[str] = mapped_column(Text, nullable=False)
     canonical_hash: Mapped[str] = mapped_column(String(64), nullable=False)  # SHA256
-    canonical_version: Mapped[int] = mapped_column(nullable=False, default=1)
     text_byte_length: Mapped[int] = mapped_column(nullable=False)
     extractor_version: Mapped[str] = mapped_column(String(50), nullable=False)
 

@@ -115,7 +115,7 @@ def test_auth_me_valid_token_response_shape(mock_verify, client, db_session):
     )
 
     assert response1.status_code == 200
-    body1 = response1.json()
+    body1 = response1.json()["data"]
 
     # Assert response shape
     assert "id" in body1
@@ -143,7 +143,7 @@ def test_auth_me_valid_token_response_shape(mock_verify, client, db_session):
     )
 
     assert response2.status_code == 200
-    body2 = response2.json()
+    body2 = response2.json()["data"]
     assert body2["id"] == body1["id"]  # Same user ID on repeat call
 
     # Verify we didn't create duplicate users
@@ -264,7 +264,7 @@ def test_health_endpoint_public(client):
     response = client.get("/health")
 
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["data"]
     assert data["status"] == "healthy"
     assert data["ok"] is True
 

@@ -104,7 +104,6 @@ def create_test_document(
         content_hash="abc123",
         canonical_text="test content",
         canonical_hash="def456",
-        canonical_version=1,
         text_byte_length=12,
         extractor_version="1.0",
         status=status,
@@ -130,7 +129,7 @@ class TestListDocumentsHappyPath:
         response = client_authenticated.get("/documents")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
 
         # Verify response shape
         assert "items" in result
@@ -153,7 +152,7 @@ class TestListDocumentsHappyPath:
         response = client_authenticated.get("/documents")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
 
         # Verify response structure
         assert len(result["items"]) == 1
@@ -181,7 +180,7 @@ class TestListDocumentsHappyPath:
         response = client_authenticated.get("/documents")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
 
         # All documents returned
         assert len(result["items"]) == 3
@@ -205,7 +204,7 @@ class TestListDocumentsHappyPath:
         response = client_authenticated.get("/documents")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
 
         # Verify order: newest first
         titles = [item["title"] for item in result["items"]]
@@ -220,7 +219,7 @@ class TestListDocumentsHappyPath:
         response = client_authenticated.get("/documents")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
 
         item = result["items"][0]
         doc_id = item["id"]
@@ -239,7 +238,7 @@ class TestListDocumentsHappyPath:
         response = client_authenticated.get("/documents")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
 
         item = result["items"][0]
 
@@ -272,7 +271,7 @@ class TestListDocumentsPagination:
         response = client_authenticated.get("/documents")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
 
         # Should return 20 items (default limit)
         assert len(result["items"]) == 20
@@ -290,7 +289,7 @@ class TestListDocumentsPagination:
         response = client_authenticated.get("/documents?limit=5")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
 
         # Should return 5 items
         assert len(result["items"]) == 5
@@ -323,7 +322,7 @@ class TestListDocumentsPagination:
         # First page
         response1 = client_authenticated.get("/documents?limit=10")
         assert response1.status_code == 200
-        result1 = response1.json()
+        result1 = response1.json()["data"]
 
         assert len(result1["items"]) == 10
         assert result1["has_more"] is True
@@ -334,7 +333,7 @@ class TestListDocumentsPagination:
         cursor = result1["next_cursor"]
         response2 = client_authenticated.get(f"/documents?limit=10&cursor={cursor}")
         assert response2.status_code == 200
-        result2 = response2.json()
+        result2 = response2.json()["data"]
 
         assert len(result2["items"]) == 10
         second_page_ids = [item["id"] for item in result2["items"]]
@@ -352,11 +351,11 @@ class TestListDocumentsPagination:
 
         # First request
         response1 = client_authenticated.get("/documents?limit=10")
-        result1 = response1.json()
+        result1 = response1.json()["data"]
 
         # Second request (same parameters)
         response2 = client_authenticated.get("/documents?limit=10")
-        result2 = response2.json()
+        result2 = response2.json()["data"]
 
         # Should be identical
         ids1 = [item["id"] for item in result1["items"]]
@@ -386,7 +385,7 @@ class TestListDocumentsStatusFilter:
         response = client_authenticated.get("/documents?status=ready")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
 
         # Only ready documents
         assert len(result["items"]) == 1
@@ -404,7 +403,7 @@ class TestListDocumentsStatusFilter:
         response = client_authenticated.get("/documents?status=pending")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
 
         assert len(result["items"]) == 2
         titles = [item["title"] for item in result["items"]]
@@ -422,7 +421,7 @@ class TestListDocumentsStatusFilter:
         response = client_authenticated.get("/documents?status=processing")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
 
         assert len(result["items"]) == 1
         assert result["items"][0]["title"] == "Processing"
@@ -437,7 +436,7 @@ class TestListDocumentsStatusFilter:
         response = client_authenticated.get("/documents?status=failed")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
 
         assert len(result["items"]) == 1
         assert result["items"][0]["title"] == "Failed"
@@ -452,7 +451,7 @@ class TestListDocumentsStatusFilter:
         response = client_authenticated.get("/documents?status=failed")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
 
         assert result["items"] == []
         assert result["has_more"] is False
@@ -485,7 +484,7 @@ class TestListDocumentsStatusFilter:
         response = client_authenticated.get("/documents?status=ready&limit=10")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
 
         # Should return 10 ready documents
         assert len(result["items"]) == 10
@@ -532,7 +531,7 @@ class TestListDocumentsACL:
         response = client.get("/documents")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
 
         # Should see only own documents
         assert len(result["items"]) == 1
@@ -572,7 +571,7 @@ class TestListDocumentsACL:
 
         response1 = client1.get("/documents")
         assert response1.status_code == 200
-        result1 = response1.json()
+        result1 = response1.json()["data"]
 
         assert len(result1["items"]) == 1
         assert result1["items"][0]["title"] == "User1 Doc"
@@ -586,7 +585,7 @@ class TestListDocumentsACL:
 
         response2 = client2.get("/documents")
         assert response2.status_code == 200
-        result2 = response2.json()
+        result2 = response2.json()["data"]
 
         assert len(result2["items"]) == 1
         assert result2["items"][0]["title"] == "User2 Doc"
@@ -617,7 +616,7 @@ class TestListDocumentsSoftDelete:
         response = client_authenticated.get("/documents")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
 
         # Only active document
         assert len(result["items"]) == 1
@@ -640,7 +639,7 @@ class TestListDocumentsSoftDelete:
         response = client_authenticated.get("/documents?limit=10")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
 
         # Should only see active documents
         assert len(result["items"]) == 10
@@ -713,10 +712,11 @@ class TestListDocumentsErrorEnvelope:
         # Should NOT have error field in success response
         assert "error" not in result
 
-        # Should have required pagination fields
-        assert "items" in result
-        assert "next_cursor" in result
-        assert "has_more" in result
+        # Should have data wrapper with required pagination fields
+        assert "data" in result
+        assert "items" in result["data"]
+        assert "next_cursor" in result["data"]
+        assert "has_more" in result["data"]
 
 
 # ============================================================================
@@ -737,7 +737,7 @@ class TestListDocumentsEdgeCases:
         response = client_authenticated.get("/documents?limit=1")
 
         assert response.status_code == 200
-        result = response.json()
+        result = response.json()["data"]
 
         assert len(result["items"]) == 1
         assert result["has_more"] is True
@@ -752,14 +752,14 @@ class TestListDocumentsEdgeCases:
         # Get last page
         response1 = client_authenticated.get("/documents?limit=3")
         assert response1.status_code == 200
-        result1 = response1.json()
+        result1 = response1.json()["data"]
 
         cursor = result1["next_cursor"]
 
         # Get next page (should be empty since we're at end)
         response2 = client_authenticated.get(f"/documents?limit=3&cursor={cursor}")
         assert response2.status_code == 200
-        result2 = response2.json()
+        result2 = response2.json()["data"]
 
         # Last page should be < limit or has_more=False
         assert result2["has_more"] is False

@@ -60,7 +60,6 @@ def test_document(db_session: Session, authenticated_user: User) -> Document:
         content_hash="abc123",
         canonical_text="test document content here",
         canonical_hash="def456",
-        canonical_version=1,
         text_byte_length=25,
         extractor_version="1.0",
         status="ready",
@@ -111,7 +110,7 @@ class TestCreateReader:
         )
 
         assert response.status_code == 201
-        data = response.json()
+        data = response.json()["data"]
         assert data["id"].startswith("rdr_")
         assert data["document_id"] == doc_typed_id
         assert data["current_position"] is None
@@ -139,14 +138,14 @@ class TestCreateReader:
             json={"document_id": doc_typed_id},
         )
         assert response1.status_code == 201
-        data1 = response1.json()
+        data1 = response1.json()["data"]
 
         response2 = client_authenticated.post(
             "/readers",
             json={"document_id": doc_typed_id},
         )
         assert response2.status_code == 201
-        data2 = response2.json()
+        data2 = response2.json()["data"]
 
         # Should return the same reader
         assert data1["id"] == data2["id"]
@@ -201,7 +200,6 @@ class TestCreateReader:
             content_hash="abc123",
             canonical_text="test",
             canonical_hash="def456",
-            canonical_version=1,
             text_byte_length=4,
             extractor_version="1.0",
             status="ready",
@@ -244,7 +242,7 @@ class TestGetReader:
         response = client_authenticated.get(f"/readers/{reader_typed_id}")
 
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         assert data["id"] == reader_typed_id
         assert data["current_position"] == 500
 
@@ -291,7 +289,6 @@ class TestGetReader:
             content_hash="abc123",
             canonical_text="test",
             canonical_hash="def456",
-            canonical_version=1,
             text_byte_length=4,
             extractor_version="1.0",
             status="ready",
@@ -348,7 +345,7 @@ class TestUpdateReader:
         )
 
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         assert data["current_position"] == 12345
         assert data["last_read_at"] is not None
 
@@ -414,7 +411,6 @@ class TestUpdateReader:
             content_hash="abc123",
             canonical_text="test",
             canonical_hash="def456",
-            canonical_version=1,
             text_byte_length=4,
             extractor_version="1.0",
             status="ready",
@@ -467,7 +463,7 @@ class TestListDocumentReaders:
         response = client_authenticated.get(f"/documents/{doc_typed_id}/readers")
 
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         assert len(data["items"]) == 2
         assert data["has_more"] is False
         assert data["next_cursor"] is None
@@ -506,7 +502,7 @@ class TestListDocumentReaders:
         )
 
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         assert len(data["items"]) == 2
         assert data["has_more"] is True
         assert data["next_cursor"] is not None
@@ -522,7 +518,7 @@ class TestListDocumentReaders:
         response = client_authenticated.get(f"/documents/{doc_typed_id}/readers")
 
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         assert len(data["items"]) == 0
         assert data["has_more"] is False
 
@@ -557,7 +553,6 @@ class TestListDocumentReaders:
             content_hash="abc123",
             canonical_text="test",
             canonical_hash="def456",
-            canonical_version=1,
             text_byte_length=4,
             extractor_version="1.0",
             status="ready",

@@ -440,7 +440,7 @@ Chunk requests batched (up to 100 chunks per API call) to minimize embedding API
 
 Only re-embed if:
 
-- Document content changed (canonical_version incremented)
+- Document content changed (hash changed)
 - Embedding model changed (chunk_version or embedding_model changed)
 - Do not re-embed for structure changes, metadata changes, or highlighting
 

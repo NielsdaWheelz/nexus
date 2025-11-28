@@ -25,6 +25,7 @@ from app.core.ids import from_api_id, to_api_id
 from app.db.session import get_session as _get_session
 from app.models.document import Document
 from app.models.user import User
+from app.schemas.common import DataEnvelope
 from app.schemas.readers import (
     CreateReaderRequest,
     ReaderResponse,
@@ -43,7 +44,7 @@ router = APIRouter(prefix="/readers", tags=["readers"])
 
 @router.post(
     "",
-    response_model=ReaderResponse,
+    response_model=DataEnvelope[ReaderResponse],
     status_code=201,
     summary="Create or retrieve reading session",
     description="Create a new reading session for a document, or return existing session if already created.",
@@ -52,7 +53,7 @@ def create_reader(
     payload: CreateReaderRequest,
     current_user: Annotated[User, Depends(rate_limit_authenticated)],
     session: Annotated[Session, Depends(_get_session)],
-) -> ReaderResponse:
+) -> DataEnvelope[ReaderResponse]:
     """Create or retrieve a reading session for a document.
 
     Semantics:
@@ -118,19 +119,21 @@ def create_reader(
     )
 
     # Convert to typed ID response
-    return ReaderResponse(
-        id=to_api_id("reader", reader_internal.id),
-        document_id=to_api_id("document", reader_internal.document_id),
-        current_position=reader_internal.current_position,
-        last_read_at=reader_internal.last_read_at,
-        created_at=reader_internal.created_at,
-        updated_at=reader_internal.updated_at,
+    return DataEnvelope(
+        data=ReaderResponse(
+            id=to_api_id("reader", reader_internal.id),
+            document_id=to_api_id("document", reader_internal.document_id),
+            current_position=reader_internal.current_position,
+            last_read_at=reader_internal.last_read_at,
+            created_at=reader_internal.created_at,
+            updated_at=reader_internal.updated_at,
+        )
     )
 
 
 @router.get(
     "/{reader_id}",
-    response_model=ReaderResponse,
+    response_model=DataEnvelope[ReaderResponse],
     summary="Get reading session",
     description="Retrieve a reading session by ID.",
 )
@@ -138,7 +141,7 @@ def get_reader(
     reader_id: str,
     current_user: Annotated[User, Depends(rate_limit_authenticated)],
     session: Annotated[Session, Depends(_get_session)],
-) -> ReaderResponse:
+) -> DataEnvelope[ReaderResponse]:
     """Get a reading session by ID.
 
     Enforces:
@@ -192,19 +195,21 @@ def get_reader(
     )
 
     # Convert to typed ID response
-    return ReaderResponse(
-        id=to_api_id("reader", reader_internal.id),
-        document_id=to_api_id("document", reader_internal.document_id),
-        current_position=reader_internal.current_position,
-        last_read_at=reader_internal.last_read_at,
-        created_at=reader_internal.created_at,
-        updated_at=reader_internal.updated_at,
+    return DataEnvelope(
+        data=ReaderResponse(
+            id=to_api_id("reader", reader_internal.id),
+            document_id=to_api_id("document", reader_internal.document_id),
+            current_position=reader_internal.current_position,
+            last_read_at=reader_internal.last_read_at,
+            created_at=reader_internal.created_at,
+            updated_at=reader_internal.updated_at,
+        )
     )
 
 
 @router.patch(
     "/{reader_id}",
-    response_model=ReaderResponse,
+    response_model=DataEnvelope[ReaderResponse],
     summary="Update reading position",
     description="Update the current reading position in a document.",
 )
@@ -213,7 +218,7 @@ def update_reader(
     payload: UpdateReaderRequest,
     current_user: Annotated[User, Depends(rate_limit_authenticated)],
     session: Annotated[Session, Depends(_get_session)],
-) -> ReaderResponse:
+) -> DataEnvelope[ReaderResponse]:
     """Update a reader's reading position.
 
     Updates:
@@ -270,11 +275,13 @@ def update_reader(
     )
 
     # Convert to typed ID response
-    return ReaderResponse(
-        id=to_api_id("reader", reader_internal.id),
-        document_id=to_api_id("document", reader_internal.document_id),
-        current_position=reader_internal.current_position,
-        last_read_at=reader_internal.last_read_at,
-        created_at=reader_internal.created_at,
-        updated_at=reader_internal.updated_at,
+    return DataEnvelope(
+        data=ReaderResponse(
+            id=to_api_id("reader", reader_internal.id),
+            document_id=to_api_id("document", reader_internal.document_id),
+            current_position=reader_internal.current_position,
+            last_read_at=reader_internal.last_read_at,
+            created_at=reader_internal.created_at,
+            updated_at=reader_internal.updated_at,
+        )
     )

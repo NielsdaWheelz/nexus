@@ -115,7 +115,6 @@ def create_document_placeholder(
         content_hash="",  # Computed during ingestion
         canonical_text="",  # Empty until extraction
         canonical_hash="",  # Empty until extraction
-        canonical_version=1,
         text_byte_length=0,
         extractor_version="pending",  # Will be set during extraction
         structure={},
