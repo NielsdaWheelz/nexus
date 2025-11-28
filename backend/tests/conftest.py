@@ -65,16 +65,28 @@ def test_engine(test_db_url: str):
 
     This engine is created once per test session and shared across all tests.
     Each test uses transactions that are rolled back for isolation.
+
+    IMPORTANT: Schema is created EXCLUSIVELY by Alembic migrations in pytest_sessionstart.
+    Do NOT add Base.metadata.create_all() here - it hides migration bugs and creates
+    a false sense of security. If tests fail with "relation does not exist", the
+    migration is broken and must be fixed, not worked around with create_all().
+
+    The Alembic migration ff2d3eadcd14_initial_schema.py is fully implemented and
+    creates all 16 tables. It runs via ensure_test_database_and_schema() before
+    any tests execute.
     """
     engine = create_engine(test_db_url, echo=False)
 
-    # Create all tables
-    Base.metadata.create_all(engine)
+    # Schema already created by Alembic in pytest_sessionstart - no create_all() needed
 
     yield engine
 
-    # Teardown: drop all tables after all tests
-    Base.metadata.drop_all(engine)
+    # Teardown: just dispose the engine, do NOT drop tables
+    # Why no drop_all()?
+    # 1. Each test uses transaction rollback for isolation - no data persists between tests
+    # 2. Tables persisting between test runs is fine - Alembic upgrade is idempotent
+    # 3. Dropping tables here would break subsequent test runs in CI or local dev
+    # 4. If schema needs reset, drop the entire test database and recreate it
     engine.dispose()
 
 
@@ -82,45 +94,43 @@ def test_engine(test_db_url: str):
 def db_session(test_engine) -> Generator[Session, None, None]:
     """Provide a database session for each test with transaction rollback.
 
-    This fixture:
-    1. Creates a new connection for each test
-    2. Begins a transaction
+    Simple transaction pattern:
+    1. Creates a connection and begins a transaction
+    2. Creates a session bound to that connection
     3. Yields the session for use in the test
     4. Rolls back the transaction after the test (cleaning up all changes)
 
     This pattern ensures:
     - Tests are isolated (changes don't persist between tests)
-    - No need to manually delete test data
     - Real database operations are tested (not mocked)
-    - Fast test execution (no fixture cleanup overhead)
+    - Fast test execution (rollback is instant)
     """
     connection = test_engine.connect()
     transaction = connection.begin()
     session = sessionmaker(bind=connection, class_=Session)()
 
-    yield session
-
-    session.close()
-    transaction.rollback()
-    connection.close()
+    try:
+        yield session
+    finally:
+        session.close()
+        transaction.rollback()
+        connection.close()
 
 
 @pytest.fixture
 def app(db_session: Session):
     """Create test FastAPI app with test database session.
 
-    The app is configured to use the test database session fixture
-    instead of the default production session.
-
-    CRITICAL: override_get_session must be a generator to match the signature
-    of get_session(), which is Generator[Session, None, None].
+    Overrides get_session dependency to:
+    - Yield the test db_session
+    - NOT call commit/rollback/close (handled by test fixture)
     """
     app = create_app()
 
     # Override the session dependency to use test session
-    # MUST be a generator to match get_session() signature
     def override_get_session() -> Generator[Session, None, None]:
         yield db_session
+        # Note: No commit/rollback/close here - handled by db_session fixture
 
     app.dependency_overrides[_get_session] = override_get_session
 

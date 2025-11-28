@@ -66,6 +66,8 @@ infra-wait:
 # ============================================================================
 
 backend-dev: infra-up infra-wait
+	@echo "Running database migrations..."
+	cd backend && make migrate
 	cd backend && make dev
 
 frontend-dev:

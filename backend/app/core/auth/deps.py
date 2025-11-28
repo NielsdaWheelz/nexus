@@ -12,6 +12,7 @@ import logging
 from typing import Annotated
 
 from fastapi import Depends, Header, Request
+from sqlalchemy.orm import Session
 
 from app.core.errors import AppError, ErrorCode
 from app.core.rate_limit import RateLimitScope, check_rate_limit
@@ -25,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 async def get_current_user(
     request: Request,
+    session: Annotated[Session, Depends(get_session)],
     authorization: Annotated[str | None, Header()] = None,
 ) -> User:
     """FastAPI dependency to get authenticated user.
@@ -40,6 +42,7 @@ async def get_current_user(
 
     Args:
         request: FastAPI request object
+        session: Database session (injected via dependency)
         authorization: Authorization header value
 
     Returns:
@@ -75,31 +78,25 @@ async def get_current_user(
     # Extract external user ID from 'sub' claim
     external_user_id = decoded["sub"]
 
-    # Get database session and look up or create user
-    session = get_session()
-    try:
-        # Query for existing user
-        user = session.query(User).filter(User.external_user_id == external_user_id).first()
+    # Query for existing user
+    user = session.query(User).filter(User.external_user_id == external_user_id).first()
 
-        if user is None:
-            # Create new user
-            logger.info(f"Creating new user with external_user_id={external_user_id}")
-            user = User(
-                external_user_id=external_user_id,
-                email=decoded.get("email") or f"{external_user_id}@clerk.local",
-            )
-            session.add(user)
-            session.commit()
-            session.refresh(user)
+    if user is None:
+        # Create new user
+        logger.info(f"Creating new user with external_user_id={external_user_id}")
+        user = User(
+            external_user_id=external_user_id,
+            email=decoded.get("email") or f"{external_user_id}@clerk.local",
+        )
+        session.add(user)
+        session.flush()  # Flush to generate ID, commit happens in get_session()
+        session.refresh(user)
 
-        # Attach user_id to request state for logging middleware
-        request.state.user_id = str(user.id)
+    # Attach user_id to request state for logging middleware
+    request.state.user_id = str(user.id)
 
-        logger.debug(f"Authenticated user: {user.id}")
-        return user
-
-    finally:
-        session.close()
+    logger.debug(f"Authenticated user: {user.id}")
+    return user
 
 
 async def rate_limit_authenticated(

@@ -12,27 +12,13 @@ import time
 from unittest.mock import patch
 
 import pytest
-from fastapi.testclient import TestClient
 
 from app.core.auth.jwks import _jwks_cache, invalidate_jwks_cache
 from app.core.errors import ErrorCode
-from app.main import create_app
 
 # ============================================================================
 # FIXTURES
 # ============================================================================
-
-
-@pytest.fixture
-def app():
-    """Create test FastAPI app."""
-    return create_app()
-
-
-@pytest.fixture
-def client(app):
-    """Create test client."""
-    return TestClient(app)
 
 
 @pytest.fixture
@@ -96,24 +82,23 @@ def test_auth_me_no_bearer_prefix(client):
 # ============================================================================
 
 
-@patch("app.core.auth.deps.get_session")
 @patch("app.core.auth.deps.verify_clerk_jwt")
-def test_auth_me_valid_token_response_shape(mock_verify, mock_session, client):
+def test_auth_me_valid_token_response_shape(mock_verify, client, db_session):
     """Happy path: valid JWT returns 200 with correct response shape.
 
     Tests:
     - JWT verification is called with token
     - Response has correct shape: id (usr_*), email, display_name, created_at, updated_at
     - Response timestamps are ISO8601 formatted
+    - User is created in database on first request
+    - Second request returns same user (idempotency)
     """
-    from unittest.mock import MagicMock
-
     from app.models.user import User
 
     external_user_id = "clerk_user_xyz"
     email = "alice@example.com"
 
-    # Mock Clerk JWT verification
+    # Mock Clerk JWT verification (external service - appropriate mock)
     mock_verify.return_value = {
         "sub": external_user_id,
         "email": email,
@@ -123,31 +108,7 @@ def test_auth_me_valid_token_response_shape(mock_verify, mock_session, client):
         "exp": int(time.time()) + 3600,
     }
 
-    # Mock database session to simulate user creation
-    mock_db_session = MagicMock()
-    mock_session.return_value = mock_db_session
-
-    # First request: user doesn't exist, create new
-    mock_db_session.query.return_value.filter.return_value.first.return_value = None
-    test_user = User(
-        id="00000000-0000-0000-0000-000000000001",
-        external_user_id=external_user_id,
-        email=email,
-    )
-    # Add timestamps
-    from datetime import datetime, timezone
-
-    test_user.created_at = datetime.now(timezone.utc)
-    test_user.updated_at = datetime.now(timezone.utc)
-
-    mock_db_session.add.return_value = None
-    mock_db_session.commit.return_value = None
-    mock_db_session.refresh.side_effect = lambda u: (
-        setattr(u, "id", test_user.id),
-        setattr(u, "created_at", test_user.created_at),
-        setattr(u, "updated_at", test_user.updated_at),
-    )
-
+    # First request: user doesn't exist yet, will be created
     response1 = client.get(
         "/auth/me",
         headers={"Authorization": "Bearer eyJhbGc.valid.token"},
@@ -169,16 +130,13 @@ def test_auth_me_valid_token_response_shape(mock_verify, mock_session, client):
     assert "T" in body1["created_at"]
     assert "Z" in body1["created_at"] or "+00" in body1["created_at"]
 
-    # Second request: user exists, return same user
-    existing_user = User(
-        id=test_user.id,
-        external_user_id=external_user_id,
-        email=email,
-    )
-    existing_user.created_at = test_user.created_at
-    existing_user.updated_at = test_user.updated_at
-    mock_db_session.query.return_value.filter.return_value.first.return_value = existing_user
+    # Verify user was actually created in database
+    user = db_session.query(User).filter(User.external_user_id == external_user_id).first()
+    assert user is not None
+    assert user.email == email
+    assert user.external_user_id == external_user_id
 
+    # Second request: user already exists, should return same user (idempotency)
     response2 = client.get(
         "/auth/me",
         headers={"Authorization": "Bearer eyJhbGc.valid.token"},
@@ -188,21 +146,21 @@ def test_auth_me_valid_token_response_shape(mock_verify, mock_session, client):
     body2 = response2.json()
     assert body2["id"] == body1["id"]  # Same user ID on repeat call
 
+    # Verify we didn't create duplicate users
+    user_count = db_session.query(User).filter(User.external_user_id == external_user_id).count()
+    assert user_count == 1
 
-@patch("app.core.auth.deps.get_session")
+
 @patch("app.core.auth.deps.verify_clerk_jwt")
-def test_auth_me_request_state_user_id_populated(mock_verify, mock_session, client, caplog):
+def test_auth_me_request_state_user_id_populated(mock_verify, client, db_session, caplog):
     """Verify request.state.user_id is set for logging middleware.
 
     When auth succeeds, user_id should be attached to request state so that
     the logging middleware can include it in structured logs.
     """
-    from unittest.mock import MagicMock
-
     from app.models.user import User
 
     external_user_id = "clerk_user_logging"
-    user_id = "00000000-0000-0000-0000-000000000002"
 
     mock_verify.return_value = {
         "sub": external_user_id,
@@ -213,29 +171,6 @@ def test_auth_me_request_state_user_id_populated(mock_verify, mock_session, clie
         "exp": int(time.time()) + 3600,
     }
 
-    # Mock database session
-    mock_db_session = MagicMock()
-    mock_session.return_value = mock_db_session
-
-    # User doesn't exist, create new
-    from datetime import datetime
-    from datetime import timezone as tz
-
-    mock_db_session.query.return_value.filter.return_value.first.return_value = None
-    test_user = User(
-        id=user_id,
-        external_user_id=external_user_id,
-        email="bob@example.com",
-    )
-    test_user.created_at = datetime.now(tz.utc)
-    test_user.updated_at = datetime.now(tz.utc)
-
-    mock_db_session.refresh.side_effect = lambda u: (
-        setattr(u, "id", test_user.id),
-        setattr(u, "created_at", test_user.created_at),
-        setattr(u, "updated_at", test_user.updated_at),
-    )
-
     with caplog.at_level(logging.INFO):
         response = client.get(
             "/auth/me",
@@ -243,6 +178,13 @@ def test_auth_me_request_state_user_id_populated(mock_verify, mock_session, clie
         )
 
     assert response.status_code == 200
+
+    # Verify user was actually created in database
+    user = db_session.query(User).filter(User.external_user_id == external_user_id).first()
+    assert user is not None
+    assert user.email == "bob@example.com"
+    assert user.external_user_id == external_user_id
+
     # Request succeeded, which means get_current_user dependency ran,
     # set request.state.user_id, and user was created in DB.
     # The logging middleware will include user_id in structured logs.

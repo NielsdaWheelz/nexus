@@ -4,7 +4,7 @@ Provides minimal SQLAlchemy engine and session maker setup for both sync and asy
 Further service/DAO wiring will be added in later PRs.
 """
 
-from typing import Optional
+from typing import Generator, Optional
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
@@ -107,11 +107,30 @@ def get_async_session_maker() -> sessionmaker[AsyncSession]:
     return _async_session_maker
 
 
-def get_session() -> Session:
-    """Get a synchronous database session.
+def get_session() -> Generator[Session, None, None]:
+    """Get a synchronous database session (FastAPI dependency).
 
-    Returns:
+    Implements the Unit of Work pattern:
+    - Opens session
+    - Yields it for use in the request
+    - Commits on success
+    - Rolls back on exception
+    - Closes session
+
+    This is the ONLY place in the codebase that should call
+    commit(), rollback(), or close().
+
+    Yields:
         Active database session for synchronous operations.
     """
     session_maker = get_sync_session_maker()
-    return session_maker()
+    session = session_maker()
+    try:
+        yield session
+        session.commit()
+        session.expire_all()  # Refresh objects after commit (important for tests)
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()

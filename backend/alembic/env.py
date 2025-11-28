@@ -92,9 +92,12 @@ def run_migrations_online() -> None:
 
     Uses synchronous SQLAlchemy engine for migrations.
 
-    Database selection:
-    - For 'alembic revision' (autogenerate): Always uses dev DATABASE_URL
-    - For 'alembic upgrade' (running migrations): Uses DATABASE_URL_TEST if set, else dev DATABASE_URL
+    Database selection priority (for running migrations):
+    1. DATABASE_URL environment variable (explicit override, highest priority)
+    2. DATABASE_URL_TEST environment variable (test environment)
+    3. settings.DATABASE_URL (dev/prod default)
+
+    For autogenerate (alembic revision), always uses dev DATABASE_URL to compare schema.
     """
     import os
     import sys
@@ -113,8 +116,13 @@ def run_migrations_online() -> None:
         # For autogenerate, always use dev database to compare current schema
         db_url = settings.DATABASE_URL
     else:
-        # For running migrations, support DATABASE_URL_TEST for test environment
-        db_url = os.environ.get("DATABASE_URL_TEST") or settings.DATABASE_URL
+        # For running migrations, check environment variables first, then fall back to config
+        # This allows both DATABASE_URL and DATABASE_URL_TEST to override settings
+        db_url = (
+            os.environ.get("DATABASE_URL")
+            or os.environ.get("DATABASE_URL_TEST")
+            or settings.DATABASE_URL
+        )
 
     # Convert async URL to sync for migrations
     if db_url.startswith("postgresql+asyncpg"):
