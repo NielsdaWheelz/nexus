@@ -116,7 +116,6 @@ def create_reader(
         user=current_user,
         document=doc,
     )
-    session.commit()
 
     # Convert to typed ID response
     return ReaderResponse(
@@ -269,7 +268,6 @@ def update_reader(
         reader_id=rdr_uuid,
         current_position=payload.current_position,
     )
-    session.commit()
 
     # Convert to typed ID response
     return ReaderResponse(

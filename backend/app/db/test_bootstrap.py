@@ -92,11 +92,21 @@ def _run_alembic_upgrade(test_db_url: str) -> None:
     Raises RuntimeError if migration fails.
     """
     try:
-        from alembic.config import Config
+        import os
+        from pathlib import Path
 
+        from alembic.config import Config
         from alembic import command
 
-        cfg = Config("alembic.ini")
+        # Find alembic.ini relative to this file (app/db/test_bootstrap.py)
+        # Go up two levels: app/db -> app -> backend
+        backend_dir = Path(__file__).parent.parent.parent
+        alembic_ini = backend_dir / "alembic.ini"
+
+        if not alembic_ini.exists():
+            raise RuntimeError(f"alembic.ini not found at {alembic_ini}")
+
+        cfg = Config(str(alembic_ini))
         cfg.set_main_option("sqlalchemy.url", test_db_url)
         command.upgrade(cfg, "head")
 

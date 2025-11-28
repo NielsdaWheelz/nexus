@@ -293,8 +293,6 @@ async def delete_annotation_endpoint(
             details={"resource_type": "annotation"},
         )
 
-    session.commit()
-
 
 @router.get(
     "/documents/{document_id}/annotations",

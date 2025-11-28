@@ -386,8 +386,10 @@ class TestListDocumentsForUser:
 
     def test_list_ordering_newest_first(self, db_session: Session, user1: User):
         """Test that documents are ordered by created_at DESC (newest first)."""
-        # Create 3 documents with slight delays to ensure different timestamps
-        import time
+        from datetime import datetime, timedelta, timezone
+
+        # Create 3 documents with deterministic timestamps
+        base_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
         docs = []
         for i in range(3):
@@ -401,8 +403,10 @@ class TestListDocumentsForUser:
                 original_size_bytes=100 + i,
                 source_url=None,
             )
+            # Set deterministic created_at: each doc is 1 minute apart
+            doc.created_at = base_time + timedelta(minutes=i)
+            db_session.flush()  # Persist the timestamp change
             docs.append(doc)
-            time.sleep(0.01)  # Small delay to ensure different timestamps
 
         result = list_documents_for_user(
             session=db_session,

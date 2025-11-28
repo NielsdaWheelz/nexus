@@ -144,7 +144,6 @@ async def upload_document(
         source_url=None,
         title=title,
     )
-    session.commit()
 
     # Convert to typed ID response
     return DocumentUploadResponse(

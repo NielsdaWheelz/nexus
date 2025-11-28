@@ -1,4 +1,4 @@
-.PHONY: help install dev test lint format type-check clean
+.PHONY: help install dev test lint format type-check clean check-uow migrate migration
 
 help:
 	@echo "Backend Makefile"
@@ -9,6 +9,9 @@ help:
 	@echo "  make lint         Run linters (ruff check + black check + mypy)"
 	@echo "  make format       Auto-format code (black + ruff fix)"
 	@echo "  make type-check   Run type checker (mypy)"
+	@echo "  make check-uow    Check Unit of Work pattern (no illegal commits)"
+	@echo "  make migrate      Run database migrations (alembic upgrade head)"
+	@echo "  make migration    Generate new migration (alembic revision --autogenerate)"
 	@echo "  make clean        Remove venv and cache"
 
 VENV := .venv
@@ -29,7 +32,11 @@ test: install
 	$(PYTHON) -m pytest --cov=app --cov-report=term
 	@echo "✓ Tests passed"
 
-lint: install
+check-uow:
+	@echo "Checking Unit of Work pattern..."
+	@bash scripts/check_uow_violations.sh
+
+lint: install check-uow
 	@echo "Running ruff check..."
 	$(PYTHON) -m ruff check . --line-length=100
 	@echo "Running black check..."
@@ -49,6 +56,17 @@ type-check: install
 	@echo "Running mypy..."
 	$(PYTHON) -m mypy app tests
 	@echo "✓ Type checking passed"
+
+migrate:
+	@echo "Running database migrations..."
+	$(PYTHON) -m alembic upgrade head
+	@echo "✓ Migrations applied"
+
+migration:
+	@echo "Generating new migration (autogenerate)..."
+	@read -p "Migration message: " msg; \
+	$(PYTHON) -m alembic revision --autogenerate -m "$$msg"
+	@echo "✓ Migration generated. Review the file before committing!"
 
 clean:
 	@echo "Cleaning up..."

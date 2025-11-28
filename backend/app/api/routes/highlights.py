@@ -183,9 +183,6 @@ async def create_highlight_endpoint(
         canonical_version=1,  # Phase 1: always version 1
     )
 
-    # Commit transaction
-    session.commit()
-
     # Convert to API response (with typed IDs)
     return HighlightItem(
         id=to_api_id("highlight", highlight_summary.id),

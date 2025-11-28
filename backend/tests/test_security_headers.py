@@ -8,35 +8,15 @@ Tests cover:
 - Header values are correct and follow security standards
 """
 
-from unittest.mock import MagicMock, patch
+from datetime import datetime, timezone
+from unittest.mock import patch
+from uuid import uuid4
 
 import pytest
-from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 from app.core.security_headers import SECURITY_HEADERS
-from app.main import create_app
 from app.models.user import User
-
-
-@pytest.fixture
-def client():
-    """Create a test client for the FastAPI app."""
-    app = create_app()
-    return TestClient(app)
-
-
-def create_mock_user(user_id: str, external_user_id: str, email: str) -> User:
-    """Helper to create a mock user."""
-    from datetime import datetime, timezone
-
-    user = User(
-        id=user_id,
-        external_user_id=external_user_id,
-        email=email,
-    )
-    user.created_at = datetime.now(timezone.utc)
-    user.updated_at = datetime.now(timezone.utc)
-    return user
 
 
 class TestSecurityHeadersPresent:
@@ -55,34 +35,35 @@ class TestSecurityHeadersPresent:
         assert header_name in response.headers, f"Header {header_name} missing"
 
     @pytest.mark.parametrize("header_name", SECURITY_HEADERS.keys())
-    @patch("app.core.auth.deps.get_session")
     @patch("app.core.auth.deps.verify_clerk_jwt")
     def test_security_headers_on_authenticated_endpoint(
-        self, mock_verify, mock_session, client, header_name, auth_token
+        self, mock_verify, client, db_session: Session, header_name, auth_token
     ):
         """Test that security headers are present on authenticated endpoint response.
 
+        Uses real database session to create a user.
+
         Args:
             mock_verify: Mocked JWT verification
-            mock_session: Mocked database session
-            client: TestClient fixture
+            client: TestClient fixture with dependency override for db_session
+            db_session: Real database session fixture
             header_name: Name of security header to check
             auth_token: Valid JWT token from fixture
         """
-        # Setup JWT verification mock
-        mock_verify.return_value = {
-            "sub": "user_test_1",
-            "email": "test1@example.com",
-        }
-
-        # Setup database mock
-        mock_db_session = MagicMock()
-        mock_session.return_value = mock_db_session
-
-        user = create_mock_user(
-            "00000000-0000-0000-0000-000000000001", "user_test_1", "test1@example.com"
+        # Create a real user in the test database
+        user = User(
+            id=uuid4(),
+            external_user_id="user_security_headers",
+            email="securityheaders@example.com",
         )
-        mock_db_session.query.return_value.filter.return_value.first.return_value = user
+        db_session.add(user)
+        db_session.flush()
+
+        # Setup JWT verification mock to return this user's external ID
+        mock_verify.return_value = {
+            "sub": user.external_user_id,
+            "email": user.email,
+        }
 
         response = client.get(
             "/auth/me",
