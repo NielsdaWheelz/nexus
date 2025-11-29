@@ -12,8 +12,9 @@
  * document_id: Typed document ID (format: doc_<uuid>)
  */
 export type CreateReaderRequest = {
-  /**
-   * Typed document ID (doc_<uuid>)
-   */
-  document_id: string;
+    /**
+     * Typed document ID (doc_<uuid>)
+     */
+    document_id: string;
 };
+

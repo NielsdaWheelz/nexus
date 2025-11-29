@@ -2,7 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-import type { AnnotationItem } from "./AnnotationItem";
+import type { AnnotationItem } from './AnnotationItem';
 /**
  * API response for list annotations endpoints (with pagination).
  *
@@ -12,16 +12,17 @@ import type { AnnotationItem } from "./AnnotationItem";
  * has_more: True if more pages exist, False otherwise
  */
 export type AnnotationListResponse = {
-  /**
-   * List of annotations
-   */
-  items: Array<AnnotationItem>;
-  /**
-   * Cursor for next page
-   */
-  next_cursor?: string | null;
-  /**
-   * Whether more items exist
-   */
-  has_more: boolean;
+    /**
+     * List of annotations
+     */
+    items: Array<AnnotationItem>;
+    /**
+     * Cursor for next page
+     */
+    next_cursor?: (string | null);
+    /**
+     * Whether more items exist
+     */
+    has_more: boolean;
 };
+

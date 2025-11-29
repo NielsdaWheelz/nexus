@@ -5,19 +5,21 @@
 /**
  * Request body for POST /annotations.
  *
- * Accepts exactly one of highlight_id.
+ * Annotations attach only to highlights (user-selected text spans), never to chunks.
+ * Chunks are purely for retrieval and embeddings; they are not annotation targets.
  *
  * Attributes:
- * highlight_id: Optional typed highlight ID (hl_<uuid>)
+ * highlight_id: Typed highlight ID (hl_<uuid>) (required)
  * content: The annotation text (required, non-empty after stripping)
  */
 export type CreateAnnotationRequest = {
-  /**
-   * Typed highlight ID (hl_<uuid>)
-   */
-  highlight_id?: string | null;
-  /**
-   * Annotation text content (required, non-empty)
-   */
-  content: string;
+    /**
+     * Typed highlight ID (hl_<uuid>) (required)
+     */
+    highlight_id: string;
+    /**
+     * Annotation text content (required, non-empty)
+     */
+    content: string;
 };
+

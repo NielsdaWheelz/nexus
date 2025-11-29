@@ -14,16 +14,17 @@
  * byte_end: Byte offset end in canonical_text (> byte_start)
  */
 export type CreateHighlightRequest = {
-  /**
-   * Typed document ID (doc_<uuid>)
-   */
-  document_id: string;
-  /**
-   * Byte offset start (>= 0)
-   */
-  byte_start: number;
-  /**
-   * Byte offset end (> byte_start)
-   */
-  byte_end: number;
+    /**
+     * Typed document ID (doc_<uuid>)
+     */
+    document_id: string;
+    /**
+     * Byte offset start (>= 0)
+     */
+    byte_start: number;
+    /**
+     * Byte offset end (> byte_start)
+     */
+    byte_end: number;
 };
+

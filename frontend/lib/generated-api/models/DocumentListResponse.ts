@@ -2,7 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-import type { DocumentListItem } from "./DocumentListItem";
+import type { DocumentListItem } from './DocumentListItem';
 /**
  * API response for GET /documents (list documents).
  *
@@ -14,16 +14,17 @@ import type { DocumentListItem } from "./DocumentListItem";
  * has_more: True if more pages exist, False otherwise
  */
 export type DocumentListResponse = {
-  /**
-   * List of documents
-   */
-  items: Array<DocumentListItem>;
-  /**
-   * Cursor for next page
-   */
-  next_cursor?: string | null;
-  /**
-   * Whether more pages exist
-   */
-  has_more: boolean;
+    /**
+     * List of documents
+     */
+    items: Array<DocumentListItem>;
+    /**
+     * Cursor for next page
+     */
+    next_cursor?: (string | null);
+    /**
+     * Whether more pages exist
+     */
+    has_more: boolean;
 };
+

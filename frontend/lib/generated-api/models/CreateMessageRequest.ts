@@ -8,8 +8,9 @@
  * Appends a user message to a conversation.
  */
 export type CreateMessageRequest = {
-  /**
-   * Message content (required, non-empty)
-   */
-  content: string;
+    /**
+     * Message content (required, non-empty)
+     */
+    content: string;
 };
+
