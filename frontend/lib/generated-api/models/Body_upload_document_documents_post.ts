@@ -3,7 +3,8 @@
 /* tslint:disable */
 /* eslint-disable */
 export type Body_upload_document_documents_post = {
-  file: Blob;
-  source_kind: string;
-  title?: string | null;
+    file: Blob;
+    source_kind: string;
+    title?: (string | null);
 };
+

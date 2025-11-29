@@ -1,64 +1,57 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { DocumentsService } from "@/lib/generated-api";
-import type { DocumentListItem, DocumentListResponse } from "@/lib/generated-api";
+import { fetchDocumentsList, isClientError, type ClientError } from "@/lib/api/documents";
+import type { DocumentListItem } from "@/lib/generated-api";
 
+/**
+ * Documents list page.
+ *
+ * Displays a paginated table of user's documents with:
+ * - Loading state
+ * - Error state with retry
+ * - Empty state
+ * - Infinite pagination via "Load More" button
+ */
 export default function DocumentsPage() {
-  const [documents, setDocuments] = useState<DocumentListItem[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const {
+    data,
+    error,
+    isLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+    refetch,
+  } = useInfiniteQuery({
+    queryKey: ["documents"],
+    queryFn: async ({ pageParam }) => {
+      return fetchDocumentsList({
+        cursor: pageParam,
+        limit: 20,
+      });
+    },
+    getNextPageParam: (lastPage) => {
+      return lastPage.has_more ? lastPage.next_cursor : undefined;
+    },
+    initialPageParam: undefined as string | undefined,
+  });
 
-  const fetchDocuments = async (cursor?: string | null) => {
-    try {
-      const response: DocumentListResponse = await DocumentsService.listDocumentsDocumentsGet(
-        undefined, // status (optional, not filtering by status)
-        20, // limit
-        cursor ?? undefined // cursor
-      );
+  // Flatten all pages into a single documents array
+  const documents = data?.pages.flatMap((page) => page.items) ?? [];
 
-      if (cursor) {
-        // Append to existing documents for pagination
-        setDocuments((prev) => [...prev, ...response.items]);
-      } else {
-        // Replace documents for initial load
-        setDocuments(response.items);
-      }
-
-      setNextCursor(response.next_cursor ?? null);
-      setHasMore(response.has_more);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load documents");
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
+  const handleLoadMore = () => {
+    if (hasNextPage && !isFetchingNextPage) {
+      void fetchNextPage();
     }
   };
 
-  useEffect(() => {
-    void fetchDocuments();
-  }, []);
-
-  const handleLoadMore = async () => {
-    if (!nextCursor || loadingMore) return;
-    setLoadingMore(true);
-    await fetchDocuments(nextCursor);
-  };
-
   const handleRetry = () => {
-    setLoading(true);
-    setError(null);
-    setDocuments([]);
-    setNextCursor(null);
-    void fetchDocuments();
+    void refetch();
   };
 
-  if (loading && documents.length === 0) {
+  // Initial loading state
+  if (isLoading) {
     return (
       <div className="flex justify-center items-center min-h-[400px]">
         <div className="text-center">
@@ -69,11 +62,18 @@ export default function DocumentsPage() {
     );
   }
 
+  // Error state
   if (error) {
+    const clientError = isClientError(error) ? error : null;
+    const errorMessage = clientError?.message ?? "An unexpected error occurred";
+
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-6">
         <h2 className="text-lg font-semibold text-red-900 mb-2">Failed to load documents</h2>
-        <p className="text-red-700 mb-4">{error}</p>
+        <p className="text-red-700 mb-4">{errorMessage}</p>
+        {clientError?.code && (
+          <p className="text-red-600 text-sm mb-4">Error code: {clientError.code}</p>
+        )}
         <button
           onClick={handleRetry}
           className="bg-red-600 text-white px-4 py-2 rounded font-medium hover:bg-red-700"
@@ -84,6 +84,7 @@ export default function DocumentsPage() {
     );
   }
 
+  // Empty state
   if (documents.length === 0) {
     return (
       <div className="text-center py-12">
@@ -93,6 +94,7 @@ export default function DocumentsPage() {
     );
   }
 
+  // Success state with documents
   return (
     <div>
       <h1 className="text-3xl font-bold text-gray-900 mb-6">Documents</h1>
@@ -130,14 +132,14 @@ export default function DocumentsPage() {
         </table>
       </div>
 
-      {hasMore && (
+      {hasNextPage && (
         <div className="mt-6 flex justify-center">
           <button
             onClick={handleLoadMore}
-            disabled={loadingMore}
+            disabled={isFetchingNextPage}
             className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loadingMore ? "Loading..." : "Load More"}
+            {isFetchingNextPage ? "Loading..." : "Load More"}
           </button>
         </div>
       )}
@@ -145,7 +147,7 @@ export default function DocumentsPage() {
   );
 }
 
-function StatusBadge({ status }: { status: "pending" | "processing" | "ready" | "failed" }) {
+function StatusBadge({ status }: { status: DocumentListItem.processing_status }) {
   const colors = {
     pending: "bg-yellow-100 text-yellow-800",
     processing: "bg-blue-100 text-blue-800",

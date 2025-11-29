@@ -16,28 +16,29 @@
  * updated_at: UTC timestamp of last update
  */
 export type ReaderResponse = {
-  /**
-   * Typed reader ID (rdr_<uuid>)
-   */
-  id: string;
-  /**
-   * Typed document ID (doc_<uuid>)
-   */
-  document_id: string;
-  /**
-   * Byte offset into canonical text
-   */
-  current_position?: number | null;
-  /**
-   * Timestamp of last read
-   */
-  last_read_at?: string | null;
-  /**
-   * UTC timestamp of creation
-   */
-  created_at: string;
-  /**
-   * UTC timestamp of last update
-   */
-  updated_at: string;
+    /**
+     * Typed reader ID (rdr_<uuid>)
+     */
+    id: string;
+    /**
+     * Typed document ID (doc_<uuid>)
+     */
+    document_id: string;
+    /**
+     * Byte offset into canonical text
+     */
+    current_position?: (number | null);
+    /**
+     * Timestamp of last read
+     */
+    last_read_at?: (string | null);
+    /**
+     * UTC timestamp of creation
+     */
+    created_at: string;
+    /**
+     * UTC timestamp of last update
+     */
+    updated_at: string;
 };
+

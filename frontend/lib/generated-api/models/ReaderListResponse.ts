@@ -2,7 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-import type { ReaderResponse } from "./ReaderResponse";
+import type { ReaderResponse } from './ReaderResponse';
 /**
  * API response for listing readers with pagination.
  *
@@ -14,16 +14,17 @@ import type { ReaderResponse } from "./ReaderResponse";
  * has_more: Boolean indicating if more results available
  */
 export type ReaderListResponse = {
-  /**
-   * List of readers
-   */
-  items: Array<ReaderResponse>;
-  /**
-   * Cursor for next page
-   */
-  next_cursor?: string | null;
-  /**
-   * Whether more results are available
-   */
-  has_more: boolean;
+    /**
+     * List of readers
+     */
+    items: Array<ReaderResponse>;
+    /**
+     * Cursor for next page
+     */
+    next_cursor?: (string | null);
+    /**
+     * Whether more results are available
+     */
+    has_more: boolean;
 };
+

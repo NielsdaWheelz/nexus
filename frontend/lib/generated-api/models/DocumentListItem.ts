@@ -17,47 +17,48 @@
  * updated_at: UTC timestamp of last update
  */
 export type DocumentListItem = {
-  /**
-   * Typed document ID (doc_<uuid>)
-   */
-  id: string;
-  /**
-   * Document title (may be None)
-   */
-  title: string | null;
-  /**
-   * Type of source document
-   */
-  source_kind: DocumentListItem.source_kind;
-  /**
-   * Current processing state
-   */
-  processing_status: DocumentListItem.processing_status;
-  /**
-   * UTC timestamp of upload
-   */
-  created_at: string;
-  /**
-   * UTC timestamp of last update
-   */
-  updated_at: string;
+    /**
+     * Typed document ID (doc_<uuid>)
+     */
+    id: string;
+    /**
+     * Document title (may be None)
+     */
+    title: (string | null);
+    /**
+     * Type of source document
+     */
+    source_kind: DocumentListItem.source_kind;
+    /**
+     * Current processing state
+     */
+    processing_status: DocumentListItem.processing_status;
+    /**
+     * UTC timestamp of upload
+     */
+    created_at: string;
+    /**
+     * UTC timestamp of last update
+     */
+    updated_at: string;
 };
 export namespace DocumentListItem {
-  /**
-   * Type of source document
-   */
-  export enum source_kind {
-    PDF = "pdf",
-    EPUB = "epub",
-    HTML = "html",
-  }
-  /**
-   * Current processing state
-   */
-  export enum processing_status {
-    PENDING = "pending",
-    PROCESSING = "processing",
-    READY = "ready",
-    FAILED = "failed",
-  }
+    /**
+     * Type of source document
+     */
+    export enum source_kind {
+        PDF = 'pdf',
+        EPUB = 'epub',
+        HTML = 'html',
+    }
+    /**
+     * Current processing state
+     */
+    export enum processing_status {
+        PENDING = 'pending',
+        PROCESSING = 'processing',
+        READY = 'ready',
+        FAILED = 'failed',
+    }
 }
+

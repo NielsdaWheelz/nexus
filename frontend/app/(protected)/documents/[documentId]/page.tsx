@@ -1,39 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { DocumentsService } from "@/lib/generated-api";
+import { fetchDocument, isClientError, isNotFoundError, type ClientError } from "@/lib/api/documents";
 import type { DocumentListItem } from "@/lib/generated-api";
 
+/**
+ * Document detail page.
+ *
+ * Displays full metadata for a single document with:
+ * - Loading state
+ * - Error state (including special handling for NOT_FOUND)
+ * - Processing/failed status messages
+ */
 export default function DocumentDetailPage({ params }: { params: { documentId: string } }) {
-  const [document, setDocument] = useState<DocumentListItem | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: document, error, isLoading } = useQuery({
+    queryKey: ["document", params.documentId],
+    queryFn: () => fetchDocument(params.documentId),
+  });
 
-  useEffect(() => {
-    const fetchDocument = async () => {
-      try {
-        const docId = params.documentId;
-        const response: DocumentListItem =
-          await DocumentsService.getDocumentDocumentsDocumentIdGet(docId);
-        setDocument(response);
-        setError(null);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Failed to load document";
-        if (message.includes("404") || message.includes("not found")) {
-          setError("Document not found");
-        } else {
-          setError(message);
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    void fetchDocument();
-  }, [params.documentId]);
-
-  if (loading) {
+  // Loading state
+  if (isLoading) {
     return (
       <div className="flex justify-center items-center min-h-[400px]">
         <div className="text-center">
@@ -44,7 +31,11 @@ export default function DocumentDetailPage({ params }: { params: { documentId: s
     );
   }
 
+  // Error state
   if (error) {
+    const clientError: ClientError | null = isClientError(error) ? error : null;
+    const isNotFound = clientError ? isNotFoundError(clientError) : false;
+
     return (
       <div>
         <Link
@@ -55,18 +46,27 @@ export default function DocumentDetailPage({ params }: { params: { documentId: s
         </Link>
         <div className="bg-red-50 border border-red-200 rounded-lg p-6">
           <h2 className="text-lg font-semibold text-red-900 mb-2">
-            {error === "Document not found" ? "Document not found" : "Failed to load document"}
+            {isNotFound ? "Document not found" : "Failed to load document"}
           </h2>
-          <p className="text-red-700">{error}</p>
+          <p className="text-red-700">
+            {isNotFound
+              ? "The document you're looking for doesn't exist or you don't have access to it."
+              : clientError?.message ?? "An unexpected error occurred"}
+          </p>
+          {clientError?.code && !isNotFound && (
+            <p className="text-red-600 text-sm mt-2">Error code: {clientError.code}</p>
+          )}
         </div>
       </div>
     );
   }
 
+  // No document (shouldn't happen if no error, but handle defensively)
   if (!document) {
     return null;
   }
 
+  // Success state
   return (
     <div>
       <Link
@@ -152,7 +152,7 @@ export default function DocumentDetailPage({ params }: { params: { documentId: s
   );
 }
 
-function StatusBadge({ status }: { status: "pending" | "processing" | "ready" | "failed" }) {
+function StatusBadge({ status }: { status: DocumentListItem.processing_status }) {
   const colors = {
     pending: "bg-yellow-100 text-yellow-800",
     processing: "bg-blue-100 text-blue-800",
@@ -165,15 +165,6 @@ function StatusBadge({ status }: { status: "pending" | "processing" | "ready" | 
       {status.charAt(0).toUpperCase() + status.slice(1)}
     </span>
   );
-}
-
-function formatDate(isoString: string): string {
-  const date = new Date(isoString);
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
 }
 
 function formatDateTime(isoString: string): string {

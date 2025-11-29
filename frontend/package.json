@@ -10,11 +10,12 @@
     "test": "vitest",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "generate:api": "openapi-typescript-codegen --input http://localhost:8000/openapi.json --output ./lib/generated-api --client fetch --exportCore=false"
+    "generate:api": "openapi --input http://localhost:8000/openapi.json --output ./lib/generated-api --client fetch"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.35.5",
     "@tailwindcss/postcss": "^4.1.17",
+    "@tanstack/react-query": "^5.60.0",
     "autoprefixer": "^10.4.22",
     "next": "^14.0.4",
     "postcss": "^8.5.6",
@@ -23,6 +24,7 @@
     "tailwindcss": "^4.1.17"
   },
   "devDependencies": {
+    "@tanstack/react-query-devtools": "^5.60.0",
     "@testing-library/jest-dom": "^6.1.5",
     "@testing-library/react": "^14.1.2",
     "@types/node": "^20.10.5",

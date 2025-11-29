@@ -9,8 +9,9 @@
  * content: The updated annotation text (required, non-empty)
  */
 export type UpdateAnnotationRequest = {
-  /**
-   * Annotation text content (required, non-empty)
-   */
-  content: string;
+    /**
+     * Annotation text content (required, non-empty)
+     */
+    content: string;
 };
+

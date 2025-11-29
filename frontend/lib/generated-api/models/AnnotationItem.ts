@@ -5,44 +5,46 @@
 /**
  * API response item for a single annotation (used in list responses).
  *
- * All IDs are typed (e.g., ann_<uuid>, hl_<uuid>, chunk_<uuid>).
+ * All IDs are typed (e.g., ann_<uuid>, hl_<uuid>, doc_<uuid>).
+ * Annotations always attach to highlights, never to chunks.
  *
  * Attributes:
  * id: Typed annotation ID (ann_<uuid>)
  * user_id: Typed user ID (usr_<uuid>)
- * document_id: Typed document ID (doc_<uuid>)
- * highlight_id: Optional typed highlight ID (hl_<uuid>)
+ * document_id: Typed document ID (doc_<uuid>) (derived from highlight)
+ * highlight_id: Typed highlight ID (hl_<uuid>) (required)
  * content: The annotation text
  * created_at: UTC timestamp of creation
  * updated_at: UTC timestamp of last update
  */
 export type AnnotationItem = {
-  /**
-   * Typed annotation ID (ann_<uuid>)
-   */
-  id: string;
-  /**
-   * Typed user ID (usr_<uuid>)
-   */
-  user_id: string;
-  /**
-   * Typed document ID (doc_<uuid>)
-   */
-  document_id: string;
-  /**
-   * Typed highlight ID (hl_<uuid>), if attached to highlight
-   */
-  highlight_id?: string | null;
-  /**
-   * Annotation text content
-   */
-  content: string;
-  /**
-   * UTC timestamp of creation
-   */
-  created_at: string;
-  /**
-   * UTC timestamp of last update
-   */
-  updated_at: string;
+    /**
+     * Typed annotation ID (ann_<uuid>)
+     */
+    id: string;
+    /**
+     * Typed user ID (usr_<uuid>)
+     */
+    user_id: string;
+    /**
+     * Typed document ID (doc_<uuid>)
+     */
+    document_id: string;
+    /**
+     * Typed highlight ID (hl_<uuid>) (required)
+     */
+    highlight_id: string;
+    /**
+     * Annotation text content
+     */
+    content: string;
+    /**
+     * UTC timestamp of creation
+     */
+    created_at: string;
+    /**
+     * UTC timestamp of last update
+     */
+    updated_at: string;
 };
+

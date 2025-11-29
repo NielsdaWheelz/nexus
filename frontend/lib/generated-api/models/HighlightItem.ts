@@ -16,28 +16,29 @@
  * updated_at: UTC timestamp of last update
  */
 export type HighlightItem = {
-  /**
-   * Typed highlight ID (hl_<uuid>)
-   */
-  id: string;
-  /**
-   * Typed document ID (doc_<uuid>)
-   */
-  document_id: string;
-  /**
-   * Byte offset start
-   */
-  byte_start: number;
-  /**
-   * Byte offset end
-   */
-  byte_end: number;
-  /**
-   * UTC timestamp of creation
-   */
-  created_at: string;
-  /**
-   * UTC timestamp of last update
-   */
-  updated_at?: string | null;
+    /**
+     * Typed highlight ID (hl_<uuid>)
+     */
+    id: string;
+    /**
+     * Typed document ID (doc_<uuid>)
+     */
+    document_id: string;
+    /**
+     * Byte offset start
+     */
+    byte_start: number;
+    /**
+     * Byte offset end
+     */
+    byte_end: number;
+    /**
+     * UTC timestamp of creation
+     */
+    created_at: string;
+    /**
+     * UTC timestamp of last update
+     */
+    updated_at?: (string | null);
 };
+

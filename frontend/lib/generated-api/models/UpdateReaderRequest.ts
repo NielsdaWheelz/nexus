@@ -11,8 +11,9 @@
  * current_position: Byte offset into canonical text (must be >= 0)
  */
 export type UpdateReaderRequest = {
-  /**
-   * Byte offset into canonical text
-   */
-  current_position: number;
+    /**
+     * Byte offset into canonical text
+     */
+    current_position: number;
 };
+
