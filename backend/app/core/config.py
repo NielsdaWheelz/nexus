@@ -142,6 +142,23 @@ class Settings(BaseSettings):
     )
 
     # ========================================================================
+    # Document Embedding Configuration (PR 6.3)
+    # ========================================================================
+
+    EMBEDDING_MODEL_DOCUMENT: str = Field(
+        default="text-embedding-3-small",
+        description="Embeddings model for document content chunks (PR 6.3)",
+    )
+    EMBEDDING_BATCH_SIZE: int = Field(
+        default=64,
+        description="Batch size for embedding API calls (PR 6.3)",
+    )
+    EMBEDDING_MAX_CHUNKS_PER_DOC: int = Field(
+        default=10_000,
+        description="Maximum chunks per document to embed (safety guard)",
+    )
+
+    # ========================================================================
     # Storage Configuration
     # ========================================================================
 

@@ -14,8 +14,8 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.models.user import User
-from app.tasks.documents import chunk_document
 from app.services.documents import create_document_placeholder
+from app.tasks.documents import chunk_document
 
 
 @pytest.fixture
@@ -117,9 +117,7 @@ class TestIngestionEnqueuesChunking:
             # Verify chunk_document.delay was called with correct document ID
             mock_chunk_task.delay.assert_called_once_with(doc_id)
 
-    def test_ingestion_only_enqueues_on_success_status(
-        self, db_session: Session, test_user: User
-    ):
+    def test_ingestion_only_enqueues_on_success_status(self, db_session: Session, test_user: User):
         """Ingestion should only enqueue chunking when status is 'ready'."""
         from app.models.document import Document
 

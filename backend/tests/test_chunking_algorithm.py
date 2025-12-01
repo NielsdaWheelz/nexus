@@ -135,8 +135,9 @@ class TestChunkCanonicalText:
 
         # Verify no overlaps
         for i in range(len(result) - 1):
-            assert result[i].end <= result[i + 1].start, \
-                f"Chunk {i} overlaps with chunk {i+1}: {result[i].end} > {result[i+1].start}"
+            assert (
+                result[i].end <= result[i + 1].start
+            ), f"Chunk {i} overlaps with chunk {i+1}: {result[i].end} > {result[i+1].start}"
 
     def test_spans_are_sorted(self):
         """Chunks should be sorted by start position."""
@@ -240,5 +241,6 @@ class TestChunkCanonicalText:
         for span in result:
             extracted = text_bytes[span.start : span.end].decode("utf-8").rstrip()
             # After rstrip, should match exactly
-            assert extracted == span.text, \
-                f"Mismatch: extracted={extracted!r}, span.text={span.text!r}"
+            assert (
+                extracted == span.text
+            ), f"Mismatch: extracted={extracted!r}, span.text={span.text!r}"

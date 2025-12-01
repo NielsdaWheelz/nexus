@@ -18,7 +18,6 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.errors import ErrorCode
 from app.models.chunk import ContentChunk
 from app.models.document import Document
 
@@ -207,12 +206,16 @@ def run_chunk_document(session: Session, document_id: UUID) -> int:
 
     # Idempotency check: if already chunked with current version, skip
     if doc.chunk_version == CHUNK_VERSION_DOCUMENT:
-        existing_chunks = session.execute(
-            select(ContentChunk).where(
-                ContentChunk.media_type == "document",
-                ContentChunk.media_id == document_id,
+        existing_chunks = (
+            session.execute(
+                select(ContentChunk).where(
+                    ContentChunk.media_type == "document",
+                    ContentChunk.media_id == document_id,
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         if existing_chunks:
             logger.info(
                 f"Document {document_id} already chunked with version {CHUNK_VERSION_DOCUMENT}, "
@@ -223,8 +226,7 @@ def run_chunk_document(session: Session, document_id: UUID) -> int:
     # Delete old chunks for this document
     session.execute(
         ContentChunk.__table__.delete().where(
-            (ContentChunk.media_type == "document")
-            & (ContentChunk.media_id == document_id)
+            (ContentChunk.media_type == "document") & (ContentChunk.media_id == document_id)
         )
     )
     session.flush()
