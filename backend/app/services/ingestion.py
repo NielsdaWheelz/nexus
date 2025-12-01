@@ -625,6 +625,12 @@ def run_ingest_document(session, document_id) -> dict:
         logger.info(f"Canonical hash changed for {document_id}, enqueuing remap job")
         remap_highlights_for_document.delay(str(doc_uuid), old_anchored_hash, result.canonical_hash)
 
+    # Enqueue chunking job for successful ingestion
+    from app.tasks.documents import chunk_document
+
+    logger.info(f"Enqueuing chunking job for document {document_id}")
+    chunk_document.delay(str(doc_uuid))
+
     return {
         "status": "success",
         "document_id": str(doc_uuid),
