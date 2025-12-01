@@ -68,6 +68,9 @@ class ErrorCode(str, Enum):
     INTERNAL_ERROR = "INTERNAL_ERROR"
     """Unexpected server error."""
 
+    EXTRACTION_FAILED = "EXTRACTION_FAILED"
+    """Document content extraction failed (PDF/EPUB/HTML parsing, node helper, etc.)."""
+
     UNAVAILABLE = "UNAVAILABLE"
     """Service unavailable (LLM API down, database unreachable, etc.)."""
 

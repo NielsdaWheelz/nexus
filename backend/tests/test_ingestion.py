@@ -17,6 +17,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from sqlalchemy.orm import Session
 
+from app.core.errors import ErrorCode
 from app.models.user import User
 from app.services.documents import create_document_placeholder
 from app.services.ingestion import run_ingest_document
@@ -409,7 +410,7 @@ def test_ingestion_sets_last_attempted_at(
 
 
 def test_ingestion_error_handling(db_session: Session, test_user: User):
-    """Test that ingestion errors set status to failed."""
+    """Test that ingestion errors set status to failed with EXTRACTION_FAILED code."""
     # Create document with invalid blob_key
     doc = create_document_placeholder(
         session=db_session,
@@ -430,5 +431,43 @@ def test_ingestion_error_handling(db_session: Session, test_user: User):
     db_session.refresh(doc)
 
     assert doc.status == "failed"
-    assert doc.error_code == "INTERNAL_ERROR"
+    assert doc.error_code == ErrorCode.EXTRACTION_FAILED.value
     assert doc.error_message  # Should contain error details
+
+
+def test_ingestion_missing_node_helper(db_session: Session, test_user: User, test_html_blob: bytes):
+    """Test that missing node/readability helper is handled gracefully with EXTRACTION_FAILED."""
+    # Create storage and store blob
+    storage = StorageService()
+    mock_file = MagicMock()
+    mock_file.file.read = MagicMock(side_effect=[test_html_blob, b""])
+    blob_key = storage.store_raw_blob(mock_file)
+
+    # Create document
+    doc = create_document_placeholder(
+        session=db_session,
+        user=test_user,
+        source_kind="html",
+        original_blob_uri=blob_key,
+        original_filename="test.html",
+        original_mime_type="text/html",
+        original_size_bytes=len(test_html_blob),
+        source_url=None,
+        title="Test Document",
+    )
+
+    # Mock subprocess.run to simulate FileNotFoundError (node not found)
+    # FileNotFoundError gets wrapped in ValueError by extract_html's generic exception handler
+    with patch("app.services.ingestion.subprocess.run") as mock_run:
+        mock_run.side_effect = FileNotFoundError("[Errno 2] No such file or directory: 'node'")
+
+        # Ingest should fail with ValueError (wrapped FileNotFoundError)
+        with pytest.raises(ValueError):
+            run_ingest_document(db_session, str(doc.id))
+
+    # Verify document is marked as failed with EXTRACTION_FAILED error code
+    db_session.refresh(doc)
+
+    assert doc.status == "failed"
+    assert doc.error_code == ErrorCode.EXTRACTION_FAILED.value
+    assert "No such file or directory" in doc.error_message
