@@ -50,6 +50,21 @@ services:
     networks:
       - nexus
 
+  worker:
+    build: ../backend
+    container_name: nexus-worker
+    command: celery -A app.celery_app worker -Q documents,embeddings -l info
+    depends_on:
+      - redis
+      - db
+    environment:
+      - DATABASE_URL=postgresql+psycopg://app_user:password@db:5432/app_db
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ../backend:/app
+    networks:
+      - nexus
+
 volumes:
   postgres_data:
 

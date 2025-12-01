@@ -338,7 +338,7 @@ class TestListDocumentHighlights:
             quote="quick brown",
             prefix="The ",
             suffix=" fox",
-            )
+        )
         db_session.add(hl1)
 
         # Highlight 2: "lazy dog"
@@ -352,7 +352,7 @@ class TestListDocumentHighlights:
             quote="lazy dog",
             prefix="the ",
             suffix=". This",
-            )
+        )
         db_session.add(hl2)
         db_session.flush()
 
@@ -409,7 +409,7 @@ class TestListDocumentHighlights:
                 quote=f"text{i}",
                 prefix="",
                 suffix="",
-                    )
+            )
             db_session.add(hl)
         db_session.flush()
 
@@ -488,7 +488,7 @@ class TestListDocumentHighlights:
             quote="The q",
             prefix="",
             suffix="",
-            )
+        )
         hl_user2 = Highlight(
             user_id=other_user.id,
             media_type="document",
@@ -499,7 +499,7 @@ class TestListDocumentHighlights:
             quote="brown",
             prefix="",
             suffix="",
-            )
+        )
         db_session.add(hl_user1)
         db_session.add(hl_user2)
         db_session.flush()
@@ -537,7 +537,7 @@ class TestListUserHighlights:
             quote="The q",
             prefix="",
             suffix="",
-            )
+        )
         db_session.add(hl)
         db_session.flush()
 
@@ -586,7 +586,7 @@ class TestListUserHighlights:
                 quote=f"text{i}",
                 prefix="",
                 suffix="",
-                    )
+            )
             db_session.add(hl)
         db_session.flush()
 

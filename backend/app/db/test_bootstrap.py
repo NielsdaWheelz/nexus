@@ -92,10 +92,10 @@ def _run_alembic_upgrade(test_db_url: str) -> None:
     Raises RuntimeError if migration fails.
     """
     try:
-        import os
         from pathlib import Path
 
         from alembic.config import Config
+
         from alembic import command
 
         # Find alembic.ini relative to this file (app/db/test_bootstrap.py)

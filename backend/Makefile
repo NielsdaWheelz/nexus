@@ -1,10 +1,11 @@
-.PHONY: help install dev test lint format type-check clean check-uow migrate migration
+.PHONY: help install dev dev-worker test lint format type-check clean check-uow migrate migration
 
 help:
 	@echo "Backend Makefile"
 	@echo ""
 	@echo "  make install      Install dependencies with uv"
 	@echo "  make dev          Start development server (uvicorn with reload)"
+	@echo "  make dev-worker   Start Celery worker (documents + embeddings queues)"
 	@echo "  make test         Run tests (pytest)"
 	@echo "  make lint         Run linters (ruff check + black check + mypy)"
 	@echo "  make format       Auto-format code (black + ruff fix)"
@@ -26,6 +27,10 @@ install:
 dev: install
 	@echo "Starting development server..."
 	$(PYTHON) -m uvicorn app.main:app --reload
+
+dev-worker: install
+	@echo "Starting Celery worker..."
+	$(PYTHON) -m celery -A app.celery_app worker -Q documents,embeddings -l info
 
 test: install
 	@echo "Running tests..."

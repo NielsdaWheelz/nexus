@@ -124,7 +124,9 @@ async def create_annotation_endpoint(
         data=AnnotationItem(
             id=to_api_id("annotation", annotation.id),
             user_id=to_api_id("user", annotation.user_id),
-            document_id=to_api_id("document", annotation.document_id) if annotation.document_id else "",
+            document_id=(
+                to_api_id("document", annotation.document_id) if annotation.document_id else ""
+            ),
             highlight_id=(
                 to_api_id("highlight", annotation.highlight_id) if annotation.highlight_id else None
             ),
@@ -205,7 +207,9 @@ async def update_annotation_endpoint(
         data=AnnotationItem(
             id=to_api_id("annotation", annotation.id),
             user_id=to_api_id("user", annotation.user_id),
-            document_id=to_api_id("document", annotation.document_id) if annotation.document_id else "",
+            document_id=(
+                to_api_id("document", annotation.document_id) if annotation.document_id else ""
+            ),
             highlight_id=(
                 to_api_id("highlight", annotation.highlight_id) if annotation.highlight_id else None
             ),
@@ -342,7 +346,9 @@ async def list_document_annotations(
                     id=to_api_id("annotation", ann.id),
                     user_id=to_api_id("user", ann.user_id),
                     document_id=to_api_id("document", ann.document_id) if ann.document_id else "",
-                    highlight_id=to_api_id("highlight", ann.highlight_id) if ann.highlight_id else None,
+                    highlight_id=(
+                        to_api_id("highlight", ann.highlight_id) if ann.highlight_id else None
+                    ),
                     content=ann.content,
                     created_at=ann.created_at,
                     updated_at=ann.updated_at,
@@ -442,7 +448,9 @@ async def list_highlight_annotations(
                     id=to_api_id("annotation", ann.id),
                     user_id=to_api_id("user", ann.user_id),
                     document_id=to_api_id("document", ann.document_id) if ann.document_id else "",
-                    highlight_id=to_api_id("highlight", ann.highlight_id) if ann.highlight_id else None,
+                    highlight_id=(
+                        to_api_id("highlight", ann.highlight_id) if ann.highlight_id else None
+                    ),
                     content=ann.content,
                     created_at=ann.created_at,
                     updated_at=ann.updated_at,
@@ -527,7 +535,9 @@ async def list_user_annotations(
                     id=to_api_id("annotation", ann.id),
                     user_id=to_api_id("user", ann.user_id),
                     document_id=to_api_id("document", ann.document_id) if ann.document_id else "",
-                    highlight_id=to_api_id("highlight", ann.highlight_id) if ann.highlight_id else None,
+                    highlight_id=(
+                        to_api_id("highlight", ann.highlight_id) if ann.highlight_id else None
+                    ),
                     content=ann.content,
                     created_at=ann.created_at,
                     updated_at=ann.updated_at,

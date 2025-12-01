@@ -15,7 +15,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
-from app.db.base import Base
 from app.db.session import get_session as _get_session
 from app.db.test_bootstrap import ensure_test_database_and_schema
 from app.main import create_app

@@ -8,7 +8,6 @@ Tests cover:
 - Header values are correct and follow security standards
 """
 
-from datetime import datetime, timezone
 from unittest.mock import patch
 from uuid import uuid4
 

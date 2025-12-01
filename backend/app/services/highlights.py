@@ -1184,9 +1184,6 @@ def list_annotations_for_document(
     # Filter by document via highlight or chunk
     # For highlights: media_type='document' and media_id=document_id
     # For chunks: media_type='document' and media_id=document_id
-    from sqlalchemy import or_
-
-    from app.models.chunk import ContentChunk
 
     highlight_doc_filter = and_(
         Annotation.highlight_id.isnot(None),
@@ -1194,9 +1191,8 @@ def list_annotations_for_document(
         Highlight.media_id == document_id,
     )
 
-    query = (
-        query.outerjoin(Highlight, Annotation.highlight_id == Highlight.id)
-        .filter(highlight_doc_filter)
+    query = query.outerjoin(Highlight, Annotation.highlight_id == Highlight.id).filter(
+        highlight_doc_filter
     )
 
     # Apply cursor filtering (keyset pagination)
@@ -1325,7 +1321,6 @@ def list_annotations_for_user(
         )
 
     # Convert to summaries (need to fetch document_id for each)
-    from app.models.chunk import ContentChunk
 
     items = []
     for ann in annotations:

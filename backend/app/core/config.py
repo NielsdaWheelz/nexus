@@ -153,6 +153,11 @@ class Settings(BaseSettings):
         default="./storage/documents",
         description="Local filesystem storage path (if STORAGE_BACKEND=local)",
     )
+    MAX_BLOB_SIZE_BYTES: int = Field(
+        default=250 * 1024 * 1024,
+        description="Maximum file size for uploads in bytes (default: 250MB). "
+        "Enforced at storage layer. Choose based on typical document size in your domain.",
+    )
     S3_BUCKET: str = Field(
         default="",
         description="S3 bucket name (if STORAGE_BACKEND=s3)",
