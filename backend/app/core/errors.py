@@ -201,3 +201,27 @@ class ValidationAppError(AppError):
             message=message,
             details=details,
         )
+
+
+class ExternalDependencyError(AppError):
+    """External dependency error (503 Service Unavailable).
+
+    Used for errors from external APIs, services, or infrastructure that should be retried.
+    Celery task decorators can use this exception type for autoretry logic.
+    """
+
+    def __init__(
+        self, message: str = "External service unavailable", details: dict[str, Any] | None = None
+    ):
+        """Initialize ExternalDependencyError with 503 status.
+
+        Args:
+            message: Human-readable error message
+            details: Optional structured error details
+        """
+        super().__init__(
+            code=ErrorCode.UNAVAILABLE,
+            http_status=503,
+            message=message,
+            details=details,
+        )

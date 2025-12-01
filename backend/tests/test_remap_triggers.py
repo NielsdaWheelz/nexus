@@ -8,7 +8,6 @@ Tests verify:
 """
 
 
-
 def test_remap_first_ingestion_no_task():
     """Test that first ingestion (no prior anchored_content_hash) doesn't trigger remap."""
     # Simulate first ingestion: anchored_content_hash is None

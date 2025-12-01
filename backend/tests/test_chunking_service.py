@@ -9,7 +9,7 @@ Tests cover:
 """
 
 import hashlib
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy.orm import Session
@@ -17,9 +17,6 @@ from sqlalchemy.orm import Session
 from app.models.chunk import ContentChunk
 from app.models.user import User
 from app.services.chunking import CHUNK_VERSION_DOCUMENT, run_chunk_document
-from app.services.documents import create_document_placeholder
-from app.services.ingestion import canonicalize_document
-from app.services.storage import StorageService
 
 
 @pytest.fixture
@@ -51,9 +48,7 @@ def test_html_blob() -> bytes:
 """
 
 
-def create_ready_document(
-    db_session: Session, test_user: User, canonical_text: str = None
-):
+def create_ready_document(db_session: Session, test_user: User, canonical_text: str = None):
     """Helper to create a document in ready status with canonical text."""
     from app.models.document import Document
 
@@ -163,9 +158,7 @@ class TestRunChunkDocument:
         starts = [c.text_start for c in chunks]
         assert starts == sorted(starts)
 
-    def test_idempotent_rechunk_unchanged_document(
-        self, db_session: Session, test_user: User
-    ):
+    def test_idempotent_rechunk_unchanged_document(self, db_session: Session, test_user: User):
         """Re-chunking an unchanged document is idempotent (no duplicates)."""
         doc = create_ready_document(db_session, test_user)
         doc_id = doc.id
@@ -432,7 +425,9 @@ class TestRunChunkDocument:
         db_session.flush()
 
         # Simulate canonical_text change (e.g., from re-ingestion)
-        new_text = "Brand new paragraph one.\n\nBrand new paragraph two.\n\nBrand new paragraph three."
+        new_text = (
+            "Brand new paragraph one.\n\nBrand new paragraph two.\n\nBrand new paragraph three."
+        )
         doc.canonical_text = new_text
         doc.canonical_hash = hashlib.sha256(new_text.encode()).hexdigest()
         doc.chunk_version = None  # Force re-chunking (simulate remap trigger)

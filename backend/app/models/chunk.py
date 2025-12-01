@@ -5,8 +5,8 @@ Per spec/schemas/chunks.md, there are three types of chunks:
 2. Thought chunks: For annotations, messages, conversation summaries
 3. Metadata chunks: For document/episode/video titles, authors, descriptions
 
-NOTE: Vector embeddings (pgvector) are added in PR 6.1 Embeddings Pipeline.
-This PR creates the table structure; embeddings column added later via migration.
+NOTE: Vector embeddings (pgvector) are added in PR 6.3 Embeddings Pipeline.
+This PR adds the embedding column and pgvector index via Alembic migration.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     JSON,
     BigInteger,
@@ -67,8 +68,10 @@ class ContentChunk(Base):
     text_end: Mapped[int] = mapped_column(BigInteger, nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
 
-    # Note: embedding column (pgvector) is added in PR 6.1 via Alembic migration
-    # For Phase 1, we store the structure without the vector column
+    # Vector embedding (1536 dimensions for OpenAI models)
+    # Added in PR 6.3 via Alembic migration
+    # Uses pgvector's Vector type for native PostgreSQL vector support
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(1536), nullable=True)
 
     chunk_metadata: Mapped[dict[str, object]] = mapped_column(
         "metadata", JSON, nullable=False, default=dict
