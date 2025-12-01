@@ -40,7 +40,7 @@ class ContentChunk(Base):
     - media_type: One of 'document', 'episode', 'video'
     - media_id: UUID of the media object
     - chunk_version: Version string of chunking strategy (e.g., "v1")
-    - embedding_model: Model name used for embeddings (e.g., "text-embedding-3-small")
+    - embedding_model: Model name used for embeddings (e.g., "text-embedding-3-small"), NULL if not yet embedded
     - text_start: Byte offset start in canonical/transcript text
     - text_end: Byte offset end in canonical/transcript text
     - text: The chunk text
@@ -61,7 +61,7 @@ class ContentChunk(Base):
     media_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
     chunk_version: Mapped[str] = mapped_column(String(50), nullable=False)
-    embedding_model: Mapped[str] = mapped_column(String(100), nullable=False)
+    embedding_model: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     text_start: Mapped[int] = mapped_column(BigInteger, nullable=False)
     text_end: Mapped[int] = mapped_column(BigInteger, nullable=False)
