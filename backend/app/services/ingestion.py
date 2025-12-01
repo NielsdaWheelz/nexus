@@ -34,6 +34,10 @@ except ImportError:
 from app.services.storage import StorageService
 from app.tasks.remap import remap_highlights_for_document
 
+# HTML extraction limits
+MAX_HTML_INPUT_SIZE = 50 * 1024 * 1024  # 50 MB max for HTML input
+READABILITY_HELPER_TIMEOUT = 30  # seconds
+
 
 @dataclass
 class CanonicalizationResult:
@@ -356,11 +360,16 @@ def extract_html(blob_bytes: bytes) -> tuple[str, dict, str]:
         Tuple of (canonical_text, structure, extractor_version)
 
     Raises:
-        ValueError: If HTML invalid or extraction fails
-        RuntimeError: If Node.js helper script fails
+        ValueError: If HTML invalid, too large, or extraction fails
 
     Spec: Extract text using Mozilla Readability algorithm.
     """
+    # Check input size limit
+    if len(blob_bytes) > MAX_HTML_INPUT_SIZE:
+        raise ValueError(
+            f"HTML input too large: {len(blob_bytes)} bytes exceeds limit of {MAX_HTML_INPUT_SIZE}"
+        )
+
     try:
         # Try UTF-8 first, fall back to ISO-8859-1
         try:
@@ -377,14 +386,13 @@ def extract_html(blob_bytes: bytes) -> tuple[str, dict, str]:
             ["node", str(helper_script)],
             input=content.encode("utf-8"),
             capture_output=True,
-            timeout=30,
+            timeout=READABILITY_HELPER_TIMEOUT,
             check=False,
         )
 
         if result.returncode != 0:
-            raise RuntimeError(
-                f"Readability helper failed: {result.stderr.decode('utf-8', errors='replace')}"
-            )
+            stderr = result.stderr.decode("utf-8", errors="replace")
+            raise ValueError(f"Readability helper failed: {stderr}")
 
         # Parse the JSON output
         output = json.loads(result.stdout.decode("utf-8"))
@@ -413,7 +421,12 @@ def extract_html(blob_bytes: bytes) -> tuple[str, dict, str]:
     except json.JSONDecodeError as e:
         raise ValueError(f"Failed to parse readability helper output: {e}") from e
     except subprocess.TimeoutExpired:
-        raise RuntimeError("Readability helper timed out") from None
+        raise ValueError(
+            f"Readability helper timed out after {READABILITY_HELPER_TIMEOUT}s"
+        ) from None
+    except ValueError:
+        # Re-raise ValueError as-is (includes size check, json parse, helper failure)
+        raise
     except Exception as e:
         raise ValueError(f"HTML extraction failed: {e}") from e
 
@@ -580,7 +593,7 @@ def run_ingest_document(session, document_id) -> dict:
         logger.error(f"Canonicalization failed for {document_id}: {e}")
         # Set failure status and re-raise for retry
         doc.status = "failed"
-        doc.error_code = ErrorCode.INTERNAL_ERROR.value
+        doc.error_code = ErrorCode.EXTRACTION_FAILED.value
         doc.error_message = str(e)[:500]
         session.flush()
         raise
