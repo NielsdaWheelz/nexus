@@ -92,6 +92,9 @@ class Document(Base):
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)  # SHA256
     canonical_text: Mapped[str] = mapped_column(Text, nullable=False)
     canonical_hash: Mapped[str] = mapped_column(String(64), nullable=False)  # SHA256
+    anchored_content_hash: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True
+    )  # SHA256 of canonical_text at highlight creation time
     text_byte_length: Mapped[int] = mapped_column(nullable=False)
     extractor_version: Mapped[str] = mapped_column(String(50), nullable=False)
 

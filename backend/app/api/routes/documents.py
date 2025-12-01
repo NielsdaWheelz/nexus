@@ -29,6 +29,7 @@ from app.schemas.readers import ReaderListResponse, ReaderResponse
 from app.services.documents import create_document_placeholder, list_documents_for_user
 from app.services.readers import list_readers_for_document as list_readers_service
 from app.services.storage import StorageService
+from app.tasks.documents import ingest_document
 
 logger = logging.getLogger(__name__)
 
@@ -145,6 +146,10 @@ async def upload_document(
         source_url=None,
         title=title,
     )
+
+    # Enqueue ingestion task
+    ingest_document.delay(str(doc.id))
+    logger.info(f"Enqueued ingest_document task for document {doc.id}")
 
     # Convert to typed ID response
     return DataEnvelope(

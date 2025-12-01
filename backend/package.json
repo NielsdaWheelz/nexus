@@ -1,0 +1,10 @@
+{
+  "name": "nexus-html-readability",
+  "version": "1.0.0",
+  "description": "HTML extraction helper using Mozilla Readability",
+  "main": "app/services/readability_helper.js",
+  "dependencies": {
+    "@mozilla/readability": "^0.4.4",
+    "jsdom": "^23.0.0"
+  }
+}
