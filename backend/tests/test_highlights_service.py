@@ -187,7 +187,7 @@ class TestCreateHighlight:
                 media_id=doc1.id,
                 anchor_type="text",
                 **anchor,
-                )
+            )
         assert exc_info.value.code.value == "VALIDATION_ERROR"
         assert "quote" in str(exc_info.value.message).lower()
 
@@ -205,7 +205,7 @@ class TestCreateHighlight:
                 media_id=doc1.id,
                 anchor_type="text",
                 **anchor,
-                )
+            )
         assert exc_info.value.code.value == "VALIDATION_ERROR"
         assert "prefix" in str(exc_info.value.message).lower()
 
@@ -223,7 +223,7 @@ class TestCreateHighlight:
                 media_id=doc1.id,
                 anchor_type="text",
                 **anchor,
-                )
+            )
         assert exc_info.value.code.value == "VALIDATION_ERROR"
         assert "suffix" in str(exc_info.value.message).lower()
 
@@ -241,7 +241,7 @@ class TestCreateHighlight:
                 media_id=doc1.id,
                 anchor_type="text",
                 **anchor,
-                )
+            )
         assert exc_info.value.code.value == "VALIDATION_ERROR"
 
     def test_create_highlight_end_before_start(
@@ -258,7 +258,7 @@ class TestCreateHighlight:
                 media_id=doc1.id,
                 anchor_type="text",
                 **anchor,
-                )
+            )
         assert exc_info.value.code.value == "VALIDATION_ERROR"
 
     def test_create_highlight_offset_out_of_bounds(
@@ -276,7 +276,7 @@ class TestCreateHighlight:
                 media_id=doc1.id,
                 anchor_type="text",
                 **anchor,
-                )
+            )
         assert exc_info.value.code.value == "VALIDATION_ERROR"
 
     def test_create_highlight_no_document_not_found(
@@ -292,7 +292,7 @@ class TestCreateHighlight:
                 media_id=uuid.uuid4(),  # Does not exist
                 anchor_type="text",
                 **anchor,
-                )
+            )
 
     def test_create_highlight_document_not_owned(
         self, db_session: Session, user1: User, user2: User, doc1: Document
@@ -307,7 +307,7 @@ class TestCreateHighlight:
                 media_id=doc1.id,
                 anchor_type="text",
                 **anchor,
-                )
+            )
 
     def test_create_highlight_deleted_document(
         self, db_session: Session, user1: User, doc1: Document
@@ -325,7 +325,7 @@ class TestCreateHighlight:
                 media_id=doc1.id,
                 anchor_type="text",
                 **anchor,
-                )
+            )
 
     def test_create_highlight_pdf_anchor_valid(
         self, db_session: Session, user1: User, doc1: Document
@@ -414,7 +414,6 @@ class TestCreateHighlight:
                 pdf_char_offset=10,
                 pdf_file_hash=None,  # Missing
             )
-
 
 
 # ============================================================================
@@ -599,7 +598,7 @@ class TestListHighlights:
                 media_id=doc1.id,
                 anchor_type="text",
                 **anchor,
-                )
+            )
 
         # Fetch with limit 2
         result1 = list_highlights_for_document(
@@ -1289,7 +1288,7 @@ class TestDeterministicOrdering:
                 media_id=doc1.id,
                 anchor_type="text",
                 **anchor,
-                )
+            )
             ids.append(hl.id)
 
         # Fetch twice and verify same order

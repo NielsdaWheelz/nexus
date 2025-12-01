@@ -21,6 +21,4 @@ def health(response: Response) -> DataEnvelope[HealthStatus]:
     Returns:
         DataEnvelope wrapping HealthStatus with ok=True and status="healthy"
     """
-    return DataEnvelope(
-        data=HealthStatus(ok=True, status="healthy")
-    )
+    return DataEnvelope(data=HealthStatus(ok=True, status="healthy"))

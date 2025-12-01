@@ -36,9 +36,7 @@ class TestAuthenticatedRateLimiting:
     """Test rate limiting for authenticated endpoints (per-user)."""
 
     @patch("app.core.auth.deps.verify_clerk_jwt")
-    def test_authenticated_requests_within_limit(
-        self, mock_verify, client, db_session: Session
-    ):
+    def test_authenticated_requests_within_limit(self, mock_verify, client, db_session: Session):
         """Test that authenticated requests within limit succeed.
 
         Uses real db_session to create user, no session mocking.
@@ -70,9 +68,7 @@ class TestAuthenticatedRateLimiting:
             assert response.status_code == 200, f"Request {i+1} failed: {response.text}"
 
     @patch("app.core.auth.deps.verify_clerk_jwt")
-    def test_authenticated_requests_exceed_limit(
-        self, mock_verify, client, db_session: Session
-    ):
+    def test_authenticated_requests_exceed_limit(self, mock_verify, client, db_session: Session):
         """Test that authenticated requests exceeding limit return 429.
 
         Uses real db_session to create user, no session mocking.
@@ -228,4 +224,6 @@ class TestHealthCheckExempt:
         # Health is NOT actually rate limited, so all should succeed
         for i in range(limit * 2):
             response = client.get("/health")
-            assert response.status_code == 200, f"Request {i+1} should succeed (health not rate-limited)"
+            assert (
+                response.status_code == 200
+            ), f"Request {i+1} should succeed (health not rate-limited)"
