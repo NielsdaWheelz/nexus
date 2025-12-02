@@ -1,8 +1,8 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { fetchDocument, isClientError, isNotFoundError, type ClientError } from "@/lib/api/documents";
+import { useDocumentDetail } from "@/lib/hooks/useDocuments";
+import { isClientError, isNotFoundError, type ClientError } from "@/lib/api/http";
 import type { DocumentListItem } from "@/lib/generated-api";
 
 /**
@@ -14,10 +14,7 @@ import type { DocumentListItem } from "@/lib/generated-api";
  * - Processing/failed status messages
  */
 export default function DocumentDetailPage({ params }: { params: { documentId: string } }) {
-  const { data: document, error, isLoading } = useQuery({
-    queryKey: ["document", params.documentId],
-    queryFn: () => fetchDocument(params.documentId),
-  });
+  const { data: document, error, isLoading } = useDocumentDetail(params.documentId);
 
   // Loading state
   if (isLoading) {

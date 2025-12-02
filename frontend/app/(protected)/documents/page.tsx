@@ -1,8 +1,7 @@
 "use client";
 
-import { useInfiniteQuery } from "@tanstack/react-query";
-import Link from "next/link";
-import { fetchDocumentsList, isClientError, type ClientError } from "@/lib/api/documents";
+import { useDocumentsList } from "@/lib/hooks/useDocuments";
+import { isClientError, type ClientError } from "@/lib/api/http";
 import type { DocumentListItem } from "@/lib/generated-api";
 
 /**
@@ -23,19 +22,7 @@ export default function DocumentsPage() {
     hasNextPage,
     fetchNextPage,
     refetch,
-  } = useInfiniteQuery({
-    queryKey: ["documents"],
-    queryFn: async ({ pageParam }) => {
-      return fetchDocumentsList({
-        cursor: pageParam,
-        limit: 20,
-      });
-    },
-    getNextPageParam: (lastPage) => {
-      return lastPage.has_more ? lastPage.next_cursor : undefined;
-    },
-    initialPageParam: undefined as string | undefined,
-  });
+  } = useDocumentsList({ pageSize: 20 });
 
   // Flatten all pages into a single documents array
   const documents = data?.pages.flatMap((page) => page.items) ?? [];
