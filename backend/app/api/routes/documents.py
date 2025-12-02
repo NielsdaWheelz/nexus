@@ -24,7 +24,12 @@ from app.core.pagination import PaginationParams
 from app.db.session import get_session as _get_session
 from app.models.user import User
 from app.schemas.common import DataEnvelope
-from app.schemas.documents import DocumentListItem, DocumentListResponse, DocumentUploadResponse
+from app.schemas.documents import (
+    DocumentContentResponse,
+    DocumentListItem,
+    DocumentListResponse,
+    DocumentUploadResponse,
+)
 from app.schemas.readers import ReaderListResponse, ReaderResponse
 from app.services.documents import create_document_placeholder, list_documents_for_user
 from app.services.readers import list_readers_for_document as list_readers_service
@@ -333,6 +338,103 @@ async def get_document(
             processing_status=doc.status,  # type: ignore
             created_at=doc.created_at,
             updated_at=doc.updated_at,
+        )
+    )
+
+
+@router.get(
+    "/{document_id}/content",
+    response_model=DataEnvelope[DocumentContentResponse],
+    status_code=200,
+    summary="Get document content",
+    description="Retrieve the canonical text content of a document for rendering.",
+)
+async def get_document_content(
+    document_id: str,
+    current_user: Annotated[User, Depends(rate_limit_authenticated)],
+    session: Annotated[Session, Depends(_get_session)],
+) -> DataEnvelope[DocumentContentResponse]:
+    """Get the canonical text content of a document.
+
+    Returns the full canonical text for rendering in the reader.
+    Document must be in 'ready' status to have content available.
+
+    Path Parameters:
+    - document_id: Typed document ID (doc_<uuid>)
+
+    Returns canonical text, hashes, and source kind.
+    Returns 404 if document doesn't exist or user doesn't own it.
+    Returns 422 if document is not yet processed (status != 'ready').
+
+    Note: For large documents (>5MB), expect response times of 1-3s.
+    Streaming or range requests are deferred to v2.
+
+    Args:
+        document_id: Typed document ID
+        current_user: Authenticated user (must own the document)
+        session: Database session
+
+    Returns:
+        DocumentContentResponse with canonical text and metadata
+
+    Raises:
+        ValidationAppError (422): If document_id format invalid or not ready
+        NotFoundError (404): If document not found or user doesn't own it
+
+    Example:
+        >>> GET /documents/doc_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/content
+        >>> {
+        ...     "canonical_text": "Chapter 1\\n\\nIt was a bright cold day...",
+        ...     "canonical_hash": "a1b2c3d4...",
+        ...     "anchored_content_hash": null,
+        ...     "source_kind": "epub",
+        ...     "text_length": 54321
+        ... }
+    """
+    # Parse and validate document_id
+    try:
+        doc_type, doc_uuid = from_api_id(document_id)
+    except ValueError as e:
+        raise ValidationAppError(
+            message=f"Invalid document_id format: {str(e)}",
+            details={"field": "document_id", "value": document_id},
+        ) from e
+
+    # Verify document type
+    if doc_type != "document":
+        raise ValidationAppError(
+            message=f"Expected document ID, got {doc_type}",
+            details={"field": "document_id", "expected_type": "document", "got_type": doc_type},
+        )
+
+    # Retrieve document with ownership check
+    from app.services.documents import _mime_to_source_kind, get_document_for_user
+
+    doc = get_document_for_user(
+        session=session,
+        user=current_user,
+        document_id=doc_uuid,
+    )
+
+    # Verify document is ready (has canonical text)
+    if doc.status != "ready":
+        raise ValidationAppError(
+            message=f"Document is not ready (status: {doc.status}). Content is only available after processing completes.",
+            details={
+                "field": "document_id",
+                "status": doc.status,
+                "expected_status": "ready",
+            },
+        )
+
+    # Return canonical text and metadata
+    return DataEnvelope(
+        data=DocumentContentResponse(
+            canonical_text=doc.canonical_text,
+            canonical_hash=doc.canonical_hash,
+            anchored_content_hash=doc.anchored_content_hash,
+            source_kind=_mime_to_source_kind(doc.original_mime_type),  # type: ignore
+            text_length=len(doc.canonical_text),
         )
     )
 

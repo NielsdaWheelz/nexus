@@ -156,6 +156,53 @@ class DocumentListItem(BaseModel):
     }
 
 
+class DocumentContentResponse(BaseModel):
+    """API response for GET /documents/{id}/content.
+
+    Returns the canonical text content of a document for rendering.
+    This endpoint returns the full canonical text without pagination.
+
+    Note: For large documents (>5MB), expect response times of 1-3s.
+    Streaming or range requests are deferred to v2.
+
+    Attributes:
+        canonical_text: The full canonical text content (UTF-8)
+        canonical_hash: SHA256 hash of canonical_text
+        anchored_content_hash: Hash at time of most recent highlight creation (may be null)
+        source_kind: Type of source (pdf, epub, html)
+        text_length: Length of canonical_text in characters (codepoints)
+    """
+
+    canonical_text: str = Field(description="Full canonical text content")
+    """The canonical text extracted from the document"""
+
+    canonical_hash: str = Field(description="SHA256 of canonical_text")
+    """Hash for detecting content changes"""
+
+    anchored_content_hash: str | None = Field(
+        default=None, description="Hash at time of highlight creation"
+    )
+    """Used for highlight remap detection; null if no highlights exist"""
+
+    source_kind: Literal["pdf", "epub", "html"] = Field(description="Type of source document")
+    """Source document type: one of pdf, epub, html"""
+
+    text_length: int = Field(description="Length of canonical_text in characters")
+    """Character count (codepoints) for validation"""
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "canonical_text": "Chapter 1\n\nIt was a bright cold day in April...",
+                "canonical_hash": "a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd",
+                "anchored_content_hash": None,
+                "source_kind": "epub",
+                "text_length": 45,
+            }
+        }
+    }
+
+
 class DocumentListResponse(BaseModel):
     """API response for GET /documents (list documents).
 

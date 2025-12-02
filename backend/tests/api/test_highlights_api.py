@@ -1,7 +1,7 @@
 """Comprehensive tests for highlights API endpoints.
 
 Tests cover:
-- POST /highlights: Create highlight with byte-range anchor
+- POST /highlights: Create highlight with character-range anchor
 - GET /documents/{document_id}/highlights: List highlights on a document
 - GET /users/{user_id}/highlights: List highlights created by a user
 - Authentication and ACL enforcement
@@ -125,13 +125,13 @@ class TestCreateHighlight:
         """Test successful highlight creation."""
         doc_typed_id = to_api_id("document", test_document.id)
 
-        # Create highlight for "quick brown fox" (bytes 4-19)
+        # Create highlight for "quick brown fox" (chars 4-19)
         response = client_authenticated.post(
             "/highlights",
             json={
                 "document_id": doc_typed_id,
-                "byte_start": 4,
-                "byte_end": 19,
+                "text_start": 4,
+                "text_end": 19,
             },
         )
 
@@ -139,8 +139,9 @@ class TestCreateHighlight:
         data = response.json()["data"]
         assert data["id"].startswith("hlght_")
         assert data["document_id"] == doc_typed_id
-        assert data["byte_start"] == 4
-        assert data["byte_end"] == 19
+        assert data["text_start"] == 4
+        assert data["text_end"] == 19
+        assert data["quote"] == "quick brown fox"
         assert data["created_at"] is not None
         assert data["updated_at"] is not None
 
@@ -162,8 +163,8 @@ class TestCreateHighlight:
             "/highlights",
             json={
                 "document_id": "invalid_id_format",
-                "byte_start": 0,
-                "byte_end": 10,
+                "text_start": 0,
+                "text_end": 10,
             },
         )
 
@@ -187,8 +188,8 @@ class TestCreateHighlight:
             "/highlights",
             json={
                 "document_id": user_typed_id,
-                "byte_start": 0,
-                "byte_end": 10,
+                "text_start": 0,
+                "text_end": 10,
             },
         )
 
@@ -204,8 +205,8 @@ class TestCreateHighlight:
             "/highlights",
             json={
                 "document_id": fake_doc_id,
-                "byte_start": 0,
-                "byte_end": 10,
+                "text_start": 0,
+                "text_end": 10,
             },
         )
 
@@ -226,8 +227,8 @@ class TestCreateHighlight:
             "/highlights",
             json={
                 "document_id": doc_typed_id,
-                "byte_start": 0,
-                "byte_end": 10,
+                "text_start": 0,
+                "text_end": 10,
             },
         )
 
@@ -235,59 +236,59 @@ class TestCreateHighlight:
         data = response.json()
         assert data["error"]["code"] == "NOT_FOUND"
 
-    def test_byte_start_negative(
+    def test_text_start_negative(
         self,
         client_authenticated: TestClient,
         test_document: Document,
     ):
-        """Test that negative byte_start returns 422."""
+        """Test that negative text_start returns 422."""
         doc_typed_id = to_api_id("document", test_document.id)
 
         response = client_authenticated.post(
             "/highlights",
             json={
                 "document_id": doc_typed_id,
-                "byte_start": -1,
-                "byte_end": 10,
+                "text_start": -1,
+                "text_end": 10,
             },
         )
 
         assert response.status_code == 422
 
-    def test_byte_end_less_than_start(
+    def test_text_end_less_than_start(
         self,
         client_authenticated: TestClient,
         test_document: Document,
     ):
-        """Test that byte_end < byte_start returns 422."""
+        """Test that text_end < text_start returns 422."""
         doc_typed_id = to_api_id("document", test_document.id)
 
         response = client_authenticated.post(
             "/highlights",
             json={
                 "document_id": doc_typed_id,
-                "byte_start": 10,
-                "byte_end": 5,
+                "text_start": 10,
+                "text_end": 5,
             },
         )
 
         assert response.status_code == 422
 
-    def test_byte_end_exceeds_canonical_length(
+    def test_text_end_exceeds_canonical_length(
         self,
         client_authenticated: TestClient,
         test_document: Document,
     ):
-        """Test that byte_end > canonical_text length returns 422."""
+        """Test that text_end > canonical_text length returns 422."""
         doc_typed_id = to_api_id("document", test_document.id)
-        canonical_bytes = test_document.canonical_text.encode("utf-8")
+        canonical_length = len(test_document.canonical_text)
 
         response = client_authenticated.post(
             "/highlights",
             json={
                 "document_id": doc_typed_id,
-                "byte_start": 0,
-                "byte_end": len(canonical_bytes) + 100,
+                "text_start": 0,
+                "text_end": canonical_length + 100,
             },
         )
 
@@ -303,8 +304,8 @@ class TestCreateHighlight:
             "/highlights",
             json={
                 "document_id": doc_typed_id,
-                "byte_start": 0,
-                "byte_end": 10,
+                "text_start": 0,
+                "text_end": 10,
             },
         )
 
@@ -368,8 +369,8 @@ class TestListDocumentHighlights:
         item = data["items"][0]
         assert item["id"].startswith("hlght_")
         assert item["document_id"] == doc_typed_id
-        assert item["byte_start"] in [4, 40]
-        assert item["byte_end"] in [15, 48]
+        assert item["text_start"] in [4, 40]
+        assert item["text_end"] in [15, 48]
 
     def test_empty_list(
         self,
@@ -510,7 +511,7 @@ class TestListDocumentHighlights:
         data = response.json()["data"]
         # Should only see authenticated_user's highlight
         assert len(data["items"]) == 1
-        assert data["items"][0]["byte_start"] == 0
+        assert data["items"][0]["text_start"] == 0
 
 
 class TestListUserHighlights:
@@ -668,8 +669,8 @@ class TestHighlightErrorEnvelopes:
             "/highlights",
             json={
                 "document_id": doc_typed_id,
-                "byte_start": 1000,
-                "byte_end": 2000,  # Out of bounds
+                "text_start": 1000,
+                "text_end": 2000,  # Out of bounds
             },
         )
 

@@ -10,6 +10,8 @@ function resetUIStore() {
   useUIStore.setState({
     isInspectorOpen: true,
     activeInspectorTab: "highlights",
+    activeHighlightId: null,
+    hoveredHighlightId: null,
   });
 }
 
@@ -216,6 +218,48 @@ describe("ReaderLayout", () => {
 
       // Chat tab active
       expect(screen.getByTestId("inspector-content-chat")).toBeInTheDocument();
+    });
+  });
+
+  describe("custom inspector content", () => {
+    test("renders custom highlights content when provided", () => {
+      render(
+        <ReaderLayout
+          documentId="doc_123"
+          highlightsContent={<div data-testid="custom-highlights">Custom Highlights</div>}
+        />
+      );
+
+      expect(screen.getByTestId("custom-highlights")).toBeInTheDocument();
+      expect(screen.getByText("Custom Highlights")).toBeInTheDocument();
+      // Should not show stub content
+      expect(screen.queryByText("Your document highlights will appear here.")).not.toBeInTheDocument();
+    });
+
+    test("renders custom annotations content when provided", () => {
+      render(
+        <ReaderLayout
+          documentId="doc_123"
+          annotationsContent={<div data-testid="custom-annotations">Custom Annotations</div>}
+        />
+      );
+
+      // Switch to annotations tab
+      fireEvent.click(screen.getByTestId("tab-annotations"));
+
+      expect(screen.getByTestId("custom-annotations")).toBeInTheDocument();
+      expect(screen.getByText("Custom Annotations")).toBeInTheDocument();
+    });
+
+    test("falls back to stub content when custom content not provided", () => {
+      render(<ReaderLayout documentId="doc_123" />);
+
+      // Highlights tab (default) - should show stub
+      expect(screen.getByText("Your document highlights will appear here.")).toBeInTheDocument();
+
+      // Annotations tab - should show stub
+      fireEvent.click(screen.getByTestId("tab-annotations"));
+      expect(screen.getByText("Your annotations will appear here.")).toBeInTheDocument();
     });
   });
 });

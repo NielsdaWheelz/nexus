@@ -2,9 +2,13 @@
 
 import Link from "next/link";
 import { useDocumentDetail } from "@/lib/hooks/useDocuments";
+import { useDocumentHighlights } from "@/lib/hooks/useHighlights";
+import { useDocumentContent } from "@/lib/hooks/useDocumentContent";
 import { isClientError, isNotFoundError, type ClientError } from "@/lib/api/http";
-import type { DocumentListItem } from "@/lib/generated-api";
+import { DocumentListItem } from "@/lib/generated-api";
 import { ReaderLayout } from "@/components/reader/ReaderLayout";
+import { HtmlHighlightReader } from "@/components/reader/HtmlHighlightReader";
+import { HighlightsInspectorTab } from "@/components/reader/HighlightsInspectorTab";
 
 /**
  * Document detail page.
@@ -66,8 +70,131 @@ export default function DocumentDetailPage({ params }: { params: { documentId: s
 
   // Success state: render in ReaderLayout
   return (
-    <ReaderLayout documentId={params.documentId}>
-      <DocumentContent document={document} />
+    <DocumentReader document={document} documentId={params.documentId} />
+  );
+}
+
+/**
+ * Document reader wrapper that handles highlights and content rendering.
+ */
+function DocumentReader({
+  document,
+  documentId,
+}: {
+  document: DocumentListItem;
+  documentId: string;
+}) {
+  const isReady = document.processing_status === "ready";
+
+  // Fetch highlights for this document
+  const {
+    highlights,
+    isLoading: highlightsLoading,
+    isError: highlightsError,
+    error: highlightsErrorObj,
+  } = useDocumentHighlights(documentId, {
+    enabled: isReady,
+  });
+
+  // Fetch canonical text content
+  const {
+    data: contentData,
+    isLoading: contentLoading,
+    isError: contentError,
+    error: contentErrorObj,
+  } = useDocumentContent(documentId, {
+    enabled: isReady,
+  });
+
+  // Check if this is an HTML/EPUB document (renderable in v1)
+  const isTextDocument =
+    document.source_kind === DocumentListItem.source_kind.HTML ||
+    document.source_kind === DocumentListItem.source_kind.EPUB;
+
+  const canonicalText = contentData?.canonical_text ?? null;
+
+  // Build inspector content for highlights tab
+  const highlightsContent = (
+    <HighlightsInspectorTab
+      highlights={highlights}
+      isLoading={highlightsLoading}
+      error={highlightsError ? highlightsErrorObj?.message : null}
+    />
+  );
+
+  // Determine reader content based on document type and status
+  let readerContent: React.ReactNode;
+
+  if (document.processing_status !== "ready") {
+    // Document not ready yet
+    readerContent = <DocumentContent document={document} />;
+  } else if (!isTextDocument) {
+    // PDF or other non-text document
+    readerContent = (
+      <div className="bg-gray-50 rounded-lg border border-gray-200 p-8 text-center">
+        <h2 className="text-lg font-semibold text-gray-700 mb-2">
+          PDF Reader Coming Soon
+        </h2>
+        <p className="text-gray-500">
+          PDF rendering is not implemented in this build.
+        </p>
+        <DocumentContent document={document} />
+      </div>
+    );
+  } else if (contentLoading) {
+    // Loading content
+    readerContent = (
+      <div className="flex justify-center items-center py-12">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-gray-500 text-sm">Loading document content...</p>
+        </div>
+      </div>
+    );
+  } else if (contentError) {
+    // Error loading content
+    readerContent = (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+        <h2 className="text-lg font-semibold text-red-900 mb-2">
+          Failed to load content
+        </h2>
+        <p className="text-red-700">
+          {contentErrorObj?.message ?? "An unexpected error occurred"}
+        </p>
+        <DocumentContent document={document} />
+      </div>
+    );
+  } else if (!canonicalText) {
+    // Text document but no content available
+    readerContent = (
+      <div>
+        <DocumentContent document={document} />
+        <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <h3 className="text-sm font-semibold text-yellow-800 mb-1">
+            No Content Available
+          </h3>
+          <p className="text-sm text-yellow-700">
+            This document has no extractable text content.
+          </p>
+        </div>
+      </div>
+    );
+  } else {
+    // Render the document with highlights
+    readerContent = (
+      <HtmlHighlightReader
+        canonicalText={canonicalText}
+        highlights={highlights}
+      />
+    );
+  }
+
+  return (
+    <ReaderLayout
+      documentId={documentId}
+      highlightsContent={highlightsContent}
+    >
+      {readerContent}
     </ReaderLayout>
   );
 }

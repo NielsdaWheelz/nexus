@@ -199,25 +199,30 @@ class AnnotationDetail(AnnotationSummary):
 class CreateHighlightRequest(BaseModel):
     """Request body for POST /highlights.
 
-    Accepts a simple byte-range anchor (text_start, text_end) which will be
+    Accepts a character-range anchor (text_start, text_end) which will be
     validated and mapped to the richer internal anchor format by the route handler.
+
+    Offset Semantics (v1):
+        text_start and text_end are zero-indexed positions into canonical_text
+        treated as a sequence of Unicode code points. For practical purposes,
+        treat them as Python/JS string indices.
 
     Attributes:
         document_id: Typed document ID (doc_<uuid>)
-        byte_start: Byte offset start in canonical_text (>= 0)
-        byte_end: Byte offset end in canonical_text (> byte_start)
+        text_start: Character offset start in canonical_text (>= 0)
+        text_end: Character offset end in canonical_text (> text_start)
     """
 
     document_id: str = Field(description="Typed document ID (doc_<uuid>)")
-    byte_start: int = Field(ge=0, description="Byte offset start (>= 0)")
-    byte_end: int = Field(gt=0, description="Byte offset end (> byte_start)")
+    text_start: int = Field(ge=0, description="Character offset start (>= 0)")
+    text_end: int = Field(gt=0, description="Character offset end (> text_start)")
 
-    @field_validator("byte_end")
+    @field_validator("text_end")
     @classmethod
-    def validate_byte_range(cls, v: int, info) -> int:
-        """Ensure byte_end > byte_start."""
-        if "byte_start" in info.data and v <= info.data["byte_start"]:
-            raise ValueError("byte_end must be greater than byte_start")
+    def validate_text_range(cls, v: int, info) -> int:
+        """Ensure text_end > text_start."""
+        if "text_start" in info.data and v <= info.data["text_start"]:
+            raise ValueError("text_end must be greater than text_start")
         return v
 
 
@@ -226,19 +231,27 @@ class HighlightItem(BaseModel):
 
     All IDs are typed (e.g., hl_<uuid>, doc_<uuid>).
 
+    Offset Semantics (v1):
+        text_start and text_end are zero-indexed positions into canonical_text
+        treated as a sequence of Unicode code points. For practical purposes,
+        treat them as Python/JS string indices. This keeps frontend/backend
+        semantically aligned without byte↔codepoint mapping.
+
     Attributes:
         id: Typed highlight ID (hl_<uuid>)
         document_id: Typed document ID (doc_<uuid>)
-        byte_start: Byte offset start in canonical_text
-        byte_end: Byte offset end in canonical_text
+        text_start: Character offset start in canonical_text (codepoint index)
+        text_end: Character offset end in canonical_text (codepoint index)
+        quote: The exact text at [text_start:text_end]
         created_at: UTC timestamp of creation
         updated_at: UTC timestamp of last update
     """
 
     id: str = Field(description="Typed highlight ID (hl_<uuid>)")
     document_id: str = Field(description="Typed document ID (doc_<uuid>)")
-    byte_start: int = Field(description="Byte offset start")
-    byte_end: int = Field(description="Byte offset end")
+    text_start: int = Field(description="Character offset start (codepoint index)")
+    text_end: int = Field(description="Character offset end (codepoint index)")
+    quote: str = Field(description="The highlighted text at [text_start:text_end]")
     created_at: datetime = Field(description="UTC timestamp of creation")
     updated_at: Optional[datetime] = Field(default=None, description="UTC timestamp of last update")
 
