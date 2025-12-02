@@ -57,6 +57,12 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
                   >
                     Documents
                   </Link>
+                  <Link
+                    href="/app/upload"
+                    className="text-gray-700 hover:text-gray-900 font-medium"
+                  >
+                    Upload
+                  </Link>
                 </div>
               </div>
               <UserButton />
