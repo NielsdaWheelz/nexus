@@ -16,6 +16,10 @@ export interface UIState {
   isInspectorOpen: boolean;
   /** Currently active inspector tab. */
   activeInspectorTab: InspectorTab;
+  /** Currently selected/focused highlight ID (hl_<uuid>) */
+  activeHighlightId: string | null;
+  /** Currently hovered highlight ID (hl_<uuid>) */
+  hoveredHighlightId: string | null;
 }
 
 /** UI state actions. */
@@ -26,6 +30,10 @@ export interface UIActions {
   toggleInspector: () => void;
   /** Set the active inspector tab. */
   setActiveInspectorTab: (tab: InspectorTab) => void;
+  /** Set the active/selected highlight ID. */
+  setActiveHighlightId: (id: string | null) => void;
+  /** Set the hovered highlight ID. */
+  setHoveredHighlightId: (id: string | null) => void;
 }
 
 /** Complete UI store type. */
@@ -37,15 +45,20 @@ export type UIStore = UIState & UIActions;
  * Defaults:
  * - Inspector open by default
  * - Highlights tab active by default
+ * - No highlight selected or hovered
  */
 export const useUIStore = create<UIStore>((set) => ({
   // State
   isInspectorOpen: true,
   activeInspectorTab: "highlights",
+  activeHighlightId: null,
+  hoveredHighlightId: null,
 
   // Actions
   setInspectorOpen: (open) => set({ isInspectorOpen: open }),
   toggleInspector: () => set((state) => ({ isInspectorOpen: !state.isInspectorOpen })),
   setActiveInspectorTab: (tab) => set({ activeInspectorTab: tab }),
+  setActiveHighlightId: (id) => set({ activeHighlightId: id }),
+  setHoveredHighlightId: (id) => set({ hoveredHighlightId: id }),
 }));
 

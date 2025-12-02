@@ -10,6 +10,14 @@ export type ReaderLayoutProps = {
   documentId: string;
   /** Optional content for the center pane. */
   children?: React.ReactNode;
+  /** Optional content for the highlights inspector tab. */
+  highlightsContent?: React.ReactNode;
+  /** Optional content for the annotations inspector tab. */
+  annotationsContent?: React.ReactNode;
+  /** Optional content for the chat inspector tab. */
+  chatContent?: React.ReactNode;
+  /** Optional content for the info inspector tab. */
+  infoContent?: React.ReactNode;
 };
 
 /** Inspector tab configuration. */
@@ -27,7 +35,14 @@ const INSPECTOR_TABS: { id: InspectorTab; label: string }[] = [
  * - Center: Reader content area
  * - Right: Inspector panel with tabs (collapsible)
  */
-export function ReaderLayout({ documentId, children }: ReaderLayoutProps) {
+export function ReaderLayout({
+  documentId,
+  children,
+  highlightsContent,
+  annotationsContent,
+  chatContent,
+  infoContent,
+}: ReaderLayoutProps) {
   const isInspectorOpen = useUIStore((s) => s.isInspectorOpen);
   const activeTab = useUIStore((s) => s.activeInspectorTab);
   const toggleInspector = useUIStore((s) => s.toggleInspector);
@@ -124,7 +139,13 @@ export function ReaderLayout({ documentId, children }: ReaderLayoutProps) {
 
           {/* Inspector body */}
           <div className="flex-1 overflow-y-auto p-4">
-            <InspectorContent tab={activeTab} />
+            <InspectorContent
+              tab={activeTab}
+              highlightsContent={highlightsContent}
+              annotationsContent={annotationsContent}
+              chatContent={chatContent}
+              infoContent={infoContent}
+            />
           </div>
         </aside>
       )}
@@ -133,10 +154,44 @@ export function ReaderLayout({ documentId, children }: ReaderLayoutProps) {
 }
 
 /**
- * Stub content for each inspector tab.
+ * Props for InspectorContent.
  */
-function InspectorContent({ tab }: { tab: InspectorTab }) {
-  const content: Record<InspectorTab, { title: string; description: string }> = {
+interface InspectorContentProps {
+  tab: InspectorTab;
+  highlightsContent?: React.ReactNode;
+  annotationsContent?: React.ReactNode;
+  chatContent?: React.ReactNode;
+  infoContent?: React.ReactNode;
+}
+
+/**
+ * Stub content for each inspector tab, with optional custom content.
+ */
+function InspectorContent({
+  tab,
+  highlightsContent,
+  annotationsContent,
+  chatContent,
+  infoContent,
+}: InspectorContentProps) {
+  // Use custom content if provided
+  const customContent: Record<InspectorTab, React.ReactNode | undefined> = {
+    highlights: highlightsContent,
+    annotations: annotationsContent,
+    chat: chatContent,
+    info: infoContent,
+  };
+
+  if (customContent[tab]) {
+    return (
+      <div data-testid={`inspector-content-${tab}`}>
+        {customContent[tab]}
+      </div>
+    );
+  }
+
+  // Fall back to stub content
+  const stubContent: Record<InspectorTab, { title: string; description: string }> = {
     highlights: {
       title: "Highlights",
       description: "Your document highlights will appear here.",
@@ -155,7 +210,7 @@ function InspectorContent({ tab }: { tab: InspectorTab }) {
     },
   };
 
-  const { title, description } = content[tab];
+  const { title, description } = stubContent[tab];
 
   return (
     <div data-testid={`inspector-content-${tab}`}>

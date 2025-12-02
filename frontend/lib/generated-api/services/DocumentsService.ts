@@ -3,6 +3,7 @@
 /* tslint:disable */
 /* eslint-disable */
 import type { Body_upload_document_documents_post } from '../models/Body_upload_document_documents_post';
+import type { DataEnvelope_DocumentContentResponse_ } from '../models/DataEnvelope_DocumentContentResponse_';
 import type { DataEnvelope_DocumentListItem_ } from '../models/DataEnvelope_DocumentListItem_';
 import type { DataEnvelope_DocumentListResponse_ } from '../models/DataEnvelope_DocumentListResponse_';
 import type { DataEnvelope_DocumentUploadResponse_ } from '../models/DataEnvelope_DocumentUploadResponse_';
@@ -83,6 +84,32 @@ export class DocumentsService {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/documents/{document_id}',
+            path: {
+                'document_id': documentId,
+            },
+            headers: {
+                'authorization': authorization,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Get document content
+     * Retrieve the canonical text content of a document for rendering.
+     * @param documentId
+     * @param authorization
+     * @returns DataEnvelope_DocumentContentResponse_ Successful Response
+     * @throws ApiError
+     */
+    public static getDocumentContentDocumentsDocumentIdContentGet(
+        documentId: string,
+        authorization?: (string | null),
+    ): CancelablePromise<DataEnvelope_DocumentContentResponse_> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/documents/{document_id}/content',
             path: {
                 'document_id': documentId,
             },

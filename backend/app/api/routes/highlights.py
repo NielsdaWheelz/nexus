@@ -49,42 +49,46 @@ router = APIRouter(tags=["highlights"])
     response_model=DataEnvelope[HighlightItem],
     status_code=201,
     summary="Create highlight",
-    description="Create a new highlight with byte-range anchor on a document.",
+    description="Create a new highlight with character-range anchor on a document.",
 )
 async def create_highlight_endpoint(
     current_user: Annotated[User, Depends(rate_limit_authenticated)],
     session: Annotated[Session, Depends(_get_session)],
     request: CreateHighlightRequest,
 ) -> DataEnvelope[HighlightItem]:
-    """Create a highlight with byte-range anchor.
+    """Create a highlight with character-range anchor.
+
+    Offset Semantics (v1):
+        text_start and text_end are zero-indexed positions into canonical_text
+        treated as a sequence of Unicode code points. For practical purposes,
+        treat them as Python/JS string indices.
 
     Accepts:
     - document_id: Typed document ID (doc_<uuid>)
-    - byte_start: Byte offset start (>= 0)
-    - byte_end: Byte offset end (> byte_start)
+    - text_start: Character offset start (>= 0)
+    - text_end: Character offset end (> text_start)
 
     Validates:
     - document_id is a valid typed ID with "document" type
     - Document exists and is owned by current user
-    - byte_start and byte_end are valid (byte_start < byte_end, within canonical_text)
+    - text_start and text_end are valid (text_start < text_end, within canonical_text)
     - Quote, prefix, suffix can be computed from canonical_text
 
-    Returns typed API response with hl_<uuid> ID and byte offsets.
+    Returns typed API response with hl_<uuid> ID and character offsets.
 
     Args:
         current_user: Authenticated user (rate limited)
         session: SQLAlchemy database session
-        request: CreateHighlightRequest with document_id, byte_start, byte_end
+        request: CreateHighlightRequest with document_id, text_start, text_end
 
     Returns:
-        HighlightItem with typed IDs and timestamps
+        HighlightItem with typed IDs, offsets, quote, and timestamps
 
     Raises:
         ValidationAppError (422): If validation fails
             - Invalid document_id format or type
-            - byte_start >= byte_end or byte_start < 0
-            - byte_end > canonical_text length
-            - Invalid UTF-8 at byte range
+            - text_start >= text_end or text_start < 0
+            - text_end > canonical_text length
         NotFoundError (404): If document doesn't exist or is not owned by user
     """
     # Parse and validate document_id
@@ -118,79 +122,70 @@ async def create_highlight_endpoint(
             details={"resource_type": "document"},
         )
 
-    # Get canonical text bytes
-    canonical_bytes = doc.canonical_text.encode("utf-8")
+    # Get canonical text (using codepoint/string semantics, not bytes)
+    canonical_text = doc.canonical_text
+    text_length = len(canonical_text)
 
-    # Validate byte range
-    if request.byte_start < 0:
+    # Validate character range
+    if request.text_start < 0:
         raise ValidationAppError(
-            message="byte_start must be non-negative",
-            details={"field": "byte_start", "value": request.byte_start},
+            message="text_start must be non-negative",
+            details={"field": "text_start", "value": request.text_start},
         )
 
-    if request.byte_end <= request.byte_start:
+    if request.text_end <= request.text_start:
         raise ValidationAppError(
-            message="byte_end must be greater than byte_start",
+            message="text_end must be greater than text_start",
             details={
-                "field": "byte_end",
-                "value": request.byte_end,
-                "byte_start": request.byte_start,
+                "field": "text_end",
+                "value": request.text_end,
+                "text_start": request.text_start,
             },
         )
 
-    if request.byte_end > len(canonical_bytes):
+    if request.text_end > text_length:
         raise ValidationAppError(
-            message=f"byte_end ({request.byte_end}) exceeds canonical_text length ({len(canonical_bytes)})",
+            message=f"text_end ({request.text_end}) exceeds canonical_text length ({text_length})",
             details={
-                "field": "byte_end",
-                "value": request.byte_end,
-                "canonical_length": len(canonical_bytes),
+                "field": "text_end",
+                "value": request.text_end,
+                "text_length": text_length,
             },
         )
 
-    # Extract quote, prefix, suffix from canonical text
-    try:
-        quote = canonical_bytes[request.byte_start : request.byte_end].decode("utf-8")
-    except UnicodeDecodeError as e:
-        raise ValidationAppError(
-            message="Invalid UTF-8 at byte range",
-            details={
-                "reason": str(e),
-                "byte_start": request.byte_start,
-                "byte_end": request.byte_end,
-            },
-        )
+    # Extract quote, prefix, suffix from canonical text (using string slicing)
+    quote = canonical_text[request.text_start : request.text_end]
 
-    # Prefix: up to 64 bytes before start
-    prefix_start = max(0, request.byte_start - 64)
-    prefix = canonical_bytes[prefix_start : request.byte_start].decode("utf-8", errors="replace")
+    # Prefix: up to 64 characters before start
+    prefix_start = max(0, request.text_start - 64)
+    prefix = canonical_text[prefix_start : request.text_start]
 
-    # Suffix: up to 64 bytes after end
-    suffix_end = min(len(canonical_bytes), request.byte_end + 64)
-    suffix = canonical_bytes[request.byte_end : suffix_end].decode("utf-8", errors="replace")
+    # Suffix: up to 64 characters after end
+    suffix_end = min(text_length, request.text_end + 64)
+    suffix = canonical_text[request.text_end : suffix_end]
 
     # Create highlight via service layer
-    # Note: canonical_version is removed; highlights now use hash-based anchoring
     highlight_summary = create_highlight(
         session=session,
         user=current_user,
         media_type="document",
         media_id=doc.id,
         anchor_type="text",
-        text_start=request.byte_start,
-        text_end=request.byte_end,
+        text_start=request.text_start,
+        text_end=request.text_end,
         quote=quote,
         prefix=prefix,
         suffix=suffix,
     )
 
-    # Convert to API response (with typed IDs)
+    # Convert to API response (with typed IDs and quote)
     return DataEnvelope(
         data=HighlightItem(
             id=to_api_id("highlight", highlight_summary.id),
             document_id=to_api_id("document", highlight_summary.media_id),
-            byte_start=highlight_summary.text_start,
-            byte_end=highlight_summary.text_end,
+            text_start=highlight_summary.text_start,
+            text_end=highlight_summary.text_end,
+            quote=highlight_summary.quote,
             created_at=highlight_summary.created_at,
             updated_at=highlight_summary.updated_at,
         )
@@ -271,15 +266,16 @@ async def list_document_highlights(
         pagination=PaginationParams(limit=limit, cursor=cursor),
     )
 
-    # Convert to API response (with typed IDs)
+    # Convert to API response (with typed IDs and quote)
     return DataEnvelope(
         data=HighlightListResponse(
             items=[
                 HighlightItem(
                     id=to_api_id("highlight", hl.id),
                     document_id=to_api_id("document", hl.media_id),
-                    byte_start=hl.text_start,
-                    byte_end=hl.text_end,
+                    text_start=hl.text_start,
+                    text_end=hl.text_end,
+                    quote=hl.quote,
                     created_at=hl.created_at,
                     updated_at=hl.updated_at,
                 )
@@ -417,15 +413,16 @@ async def list_user_highlights(
             }
         )
 
-    # Convert to API response
+    # Convert to API response (with typed IDs and quote)
     return DataEnvelope(
         data=HighlightListResponse(
             items=[
                 HighlightItem(
                     id=to_api_id("highlight", hl.id),
                     document_id=to_api_id("document", hl.media_id),
-                    byte_start=hl.text_start,
-                    byte_end=hl.text_end,
+                    text_start=hl.text_start,
+                    text_end=hl.text_end,
+                    quote=hl.quote,
                     created_at=hl.created_at,
                     updated_at=hl.updated_at,
                 )

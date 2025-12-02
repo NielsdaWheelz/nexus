@@ -53,10 +53,16 @@ def _validate_text_anchor(
 ) -> None:
     """Validate text anchor (for documents with canonical text).
 
+    Offset Semantics (v1):
+        text_start and text_end are zero-indexed positions into canonical_text
+        treated as a sequence of Unicode code points. For practical purposes,
+        treat them as Python string indices. This keeps frontend/backend
+        semantically aligned without byte↔codepoint mapping.
+
     Args:
         canonical_text: The canonical text content
-        text_start: Byte offset start (inclusive)
-        text_end: Byte offset end (exclusive)
+        text_start: Character offset start (inclusive, codepoint index)
+        text_end: Character offset end (exclusive, codepoint index)
         quote: The quoted text (must match canonical_text[text_start:text_end])
         prefix: Context before quote (must match canonical_text[max(0, text_start-64):text_start])
         suffix: Context after quote (must match canonical_text[text_end:min(len, text_end+64)])
@@ -77,19 +83,20 @@ def _validate_text_anchor(
             details={"field": "text_end", "value": text_end, "text_start": text_start},
         )
 
-    canonical_bytes = canonical_text.encode("utf-8")
-    if text_end > len(canonical_bytes):
+    # Use string length (codepoints), not byte length
+    text_length = len(canonical_text)
+    if text_end > text_length:
         raise ValidationAppError(
-            message=f"text_end ({text_end}) exceeds canonical_text length ({len(canonical_bytes)})",
+            message=f"text_end ({text_end}) exceeds canonical_text length ({text_length})",
             details={
                 "field": "text_end",
                 "value": text_end,
-                "canonical_length": len(canonical_bytes),
+                "text_length": text_length,
             },
         )
 
-    # Validate quote matches
-    actual_quote = canonical_bytes[text_start:text_end].decode("utf-8", errors="replace")
+    # Validate quote matches (using string slicing, not byte slicing)
+    actual_quote = canonical_text[text_start:text_end]
     if actual_quote != quote:
         raise ValidationAppError(
             message="quote does not match canonical_text at given offsets",
@@ -99,9 +106,9 @@ def _validate_text_anchor(
             },
         )
 
-    # Validate prefix matches (up to 64 bytes before start)
+    # Validate prefix matches (up to 64 characters before start)
     prefix_start = max(0, text_start - 64)
-    actual_prefix = canonical_bytes[prefix_start:text_start].decode("utf-8", errors="replace")
+    actual_prefix = canonical_text[prefix_start:text_start]
     if actual_prefix != prefix:
         raise ValidationAppError(
             message="prefix does not match text before quote",
@@ -111,9 +118,9 @@ def _validate_text_anchor(
             },
         )
 
-    # Validate suffix matches (up to 64 bytes after end)
-    suffix_end = min(len(canonical_bytes), text_end + 64)
-    actual_suffix = canonical_bytes[text_end:suffix_end].decode("utf-8", errors="replace")
+    # Validate suffix matches (up to 64 characters after end)
+    suffix_end = min(text_length, text_end + 64)
+    actual_suffix = canonical_text[text_end:suffix_end]
     if actual_suffix != suffix:
         raise ValidationAppError(
             message="suffix does not match text after quote",
@@ -176,10 +183,14 @@ def _validate_transcript_anchor(
 ) -> None:
     """Validate transcript anchor (for episodes/videos).
 
+    Offset Semantics (v1):
+        text_start and text_end are zero-indexed positions into transcript_text
+        treated as a sequence of Unicode code points (string indices).
+
     Args:
         transcript_text: The transcript text content
-        text_start: Byte offset start in transcript (inclusive)
-        text_end: Byte offset end in transcript (exclusive)
+        text_start: Character offset start in transcript (inclusive, codepoint index)
+        text_end: Character offset end in transcript (exclusive, codepoint index)
         quote: The quoted text
         prefix: Context before quote
         suffix: Context after quote
@@ -202,19 +213,20 @@ def _validate_transcript_anchor(
             details={"field": "text_end", "value": text_end, "text_start": text_start},
         )
 
-    transcript_bytes = transcript_text.encode("utf-8")
-    if text_end > len(transcript_bytes):
+    # Use string length (codepoints), not byte length
+    text_length = len(transcript_text)
+    if text_end > text_length:
         raise ValidationAppError(
-            message=f"text_end ({text_end}) exceeds transcript_text length ({len(transcript_bytes)})",
+            message=f"text_end ({text_end}) exceeds transcript_text length ({text_length})",
             details={
                 "field": "text_end",
                 "value": text_end,
-                "transcript_length": len(transcript_bytes),
+                "text_length": text_length,
             },
         )
 
-    # Validate quote matches
-    actual_quote = transcript_bytes[text_start:text_end].decode("utf-8", errors="replace")
+    # Validate quote matches (using string slicing, not byte slicing)
+    actual_quote = transcript_text[text_start:text_end]
     if actual_quote != quote:
         raise ValidationAppError(
             message="quote does not match transcript_text at given offsets",
@@ -226,7 +238,7 @@ def _validate_transcript_anchor(
 
     # Validate prefix and suffix
     prefix_start = max(0, text_start - 64)
-    actual_prefix = transcript_bytes[prefix_start:text_start].decode("utf-8", errors="replace")
+    actual_prefix = transcript_text[prefix_start:text_start]
     if actual_prefix != prefix:
         raise ValidationAppError(
             message="prefix does not match text before quote",
@@ -236,8 +248,8 @@ def _validate_transcript_anchor(
             },
         )
 
-    suffix_end = min(len(transcript_bytes), text_end + 64)
-    actual_suffix = transcript_bytes[text_end:suffix_end].decode("utf-8", errors="replace")
+    suffix_end = min(text_length, text_end + 64)
+    actual_suffix = transcript_text[text_end:suffix_end]
     if actual_suffix != suffix:
         raise ValidationAppError(
             message="suffix does not match text after quote",

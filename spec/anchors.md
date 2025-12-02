@@ -10,36 +10,44 @@ Highlights use three distinct anchor types depending on media format and renderi
 
 | Anchor Type | Media Type | Uses | Stability Driver |
 |------------|-----------|------|------------------|
-| `text` | Document (EPUB/HTML) | Canonical text byte offsets | Content hash (anchored_content_hash vs canonical_hash) |
+| `text` | Document (EPUB/HTML) | Canonical text character offsets (codepoints) | Content hash (anchored_content_hash vs canonical_hash) |
 | `pdf` | Document (PDF) | pdf.js text layer offsets | PDF file binary (pdf_file_hash) |
-| `transcript` | Episode, Video | Transcript byte offsets + time | Transcript hash (anchored_transcript_hash vs transcript_hash) |
+| `transcript` | Episode, Video | Transcript character offsets + time | Transcript hash (anchored_transcript_hash vs transcript_hash) |
 
 ### 1.2 Text Anchors (`anchor_type='text'`)
 
-Used for: EPUB documents, web articles, and any canonical text media where byte offsets are stable.
+Used for: EPUB documents, web articles, and any canonical text media where character offsets are stable.
+
+**Offset Semantics (v1)**:
+
+text_start and text_end are zero-indexed positions into canonical_text treated as a sequence of Unicode code points. For practical purposes, treat them as Python/JavaScript string indices. This keeps frontend/backend semantically aligned without byte↔codepoint mapping complexity.
+
+Note: This differs from earlier spec drafts that specified UTF-8 byte offsets. The change was made to simplify frontend/backend alignment—JavaScript strings and Python strings both index by code points natively. For ASCII-heavy content (English text), byte and codepoint indices are identical.
 
 **`text_start`, `text_end`**:
 
-- Zero-indexed byte positions in `canonical_text` (UTF-8 encoding)
+- Zero-indexed character positions (codepoint indices) in `canonical_text`
 - `[start, end)` interval (inclusive start, exclusive end)
 - MUST satisfy: `0 ≤ text_start < text_end ≤ len(canonical_text)`
+- In Python: `len(canonical_text)` gives character count
+- In JavaScript: `canonicalText.length` gives character count
 
 **`quote`**:
 
-- The exact bytes `canonical_text[text_start:text_end]` at creation time
-- Maximum length: 10,000 bytes
+- The exact characters `canonical_text[text_start:text_end]` at creation time
+- Maximum length: 10,000 characters
 - MUST be validated at creation: `quote == canonical_text[text_start:text_end]`
 
 **`prefix`**:
 
 - Context before quote: `canonical_text[max(0, text_start - 64):text_start]`
-- Fixed length: 64 bytes (or less if insufficient text)
+- Fixed length: 64 characters (or less if insufficient text)
 - If `text_start < 64`, prefix is truncated
 
 **`suffix`**:
 
 - Context after quote: `canonical_text[text_end:min(len(canonical_text), text_end + 64)]`
-- Fixed length: 64 bytes (or less if insufficient text)
+- Fixed length: 64 characters (or less if insufficient text)
 - If `text_end + 64 > len(canonical_text)`, suffix is truncated
 
 **Type-specific fields**: PDF and transcript fields MUST be NULL
@@ -106,19 +114,19 @@ Used for: Episodes and videos where highlights reference transcript text and mus
 
 **`text_start`, `text_end`**:
 
-- Zero-indexed byte positions in `transcript_text` (UTF-8 encoding)
+- Zero-indexed character positions (codepoint indices) in `transcript_text`
 - `[start, end)` interval (inclusive start, exclusive end)
 - MUST satisfy: `0 ≤ text_start < text_end ≤ len(transcript_text)`
 
 **`quote`**:
 
-- The exact bytes `transcript_text[text_start:text_end]` at creation time
-- Maximum length: 10,000 bytes
+- The exact characters `transcript_text[text_start:text_end]` at creation time
+- Maximum length: 10,000 characters
 - MUST be validated at creation: `quote == transcript_text[text_start:text_end]`
 
 **`prefix`, `suffix`**:
 
-- Context extracted from `transcript_text` (64 bytes each)
+- Context extracted from `transcript_text` (64 characters each)
 
 **`time_start`, `time_end`** (REQUIRED):
 

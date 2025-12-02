@@ -20,6 +20,7 @@ export type { CreateMessageRequest } from './models/CreateMessageRequest';
 export type { CreateReaderRequest } from './models/CreateReaderRequest';
 export type { DataEnvelope_AnnotationItem_ } from './models/DataEnvelope_AnnotationItem_';
 export type { DataEnvelope_AnnotationListResponse_ } from './models/DataEnvelope_AnnotationListResponse_';
+export type { DataEnvelope_DocumentContentResponse_ } from './models/DataEnvelope_DocumentContentResponse_';
 export type { DataEnvelope_DocumentListItem_ } from './models/DataEnvelope_DocumentListItem_';
 export type { DataEnvelope_DocumentListResponse_ } from './models/DataEnvelope_DocumentListResponse_';
 export type { DataEnvelope_DocumentUploadResponse_ } from './models/DataEnvelope_DocumentUploadResponse_';
@@ -29,6 +30,7 @@ export type { DataEnvelope_HighlightListResponse_ } from './models/DataEnvelope_
 export type { DataEnvelope_ReaderListResponse_ } from './models/DataEnvelope_ReaderListResponse_';
 export type { DataEnvelope_ReaderResponse_ } from './models/DataEnvelope_ReaderResponse_';
 export type { DataEnvelope_UserProfile_ } from './models/DataEnvelope_UserProfile_';
+export type { DocumentContentResponse } from './models/DocumentContentResponse';
 export { DocumentListItem } from './models/DocumentListItem';
 export type { DocumentListResponse } from './models/DocumentListResponse';
 export { DocumentUploadResponse } from './models/DocumentUploadResponse';
