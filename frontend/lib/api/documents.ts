@@ -11,7 +11,7 @@
  */
 
 import { DocumentsService } from "@/lib/generated-api";
-import type { DocumentListItem, DocumentListResponse } from "@/lib/generated-api";
+import type { DocumentListItem, DocumentListResponse, DocumentUploadResponse } from "@/lib/generated-api";
 import { callApi, type ClientError } from "./http";
 
 /**
@@ -92,6 +92,49 @@ export async function fetchDocumentsList(
 export async function fetchDocument(documentId: string): Promise<DocumentListItem> {
   return callApi<DocumentListItem>(() =>
     DocumentsService.getDocumentDocumentsDocumentIdGet(documentId)
+  );
+}
+
+/**
+ * Upload parameters for document upload.
+ */
+export interface UploadDocumentParams {
+  /** The file to upload (PDF, EPUB, or HTML) */
+  file: File;
+  /** Source type: pdf, epub, or html */
+  sourceKind: "pdf" | "epub" | "html";
+  /** Optional document title (defaults to filename if not provided) */
+  title?: string;
+}
+
+/**
+ * Upload a document file.
+ *
+ * @param params - Upload parameters (file, sourceKind, optional title)
+ * @returns The created document metadata
+ * @throws {ClientError} On API failure
+ *
+ * @example
+ * ```ts
+ * const result = await uploadDocument({
+ *   file: selectedFile,
+ *   sourceKind: "pdf",
+ *   title: "My Document",
+ * });
+ * console.log(result.id); // "doc_xxx..."
+ * ```
+ */
+export async function uploadDocument(
+  params: UploadDocumentParams
+): Promise<DocumentUploadResponse> {
+  const { file, sourceKind, title } = params;
+
+  return callApi<DocumentUploadResponse>(() =>
+    DocumentsService.uploadDocumentDocumentsPost({
+      file: file,
+      source_kind: sourceKind,
+      title: title ?? null,
+    })
   );
 }
 
