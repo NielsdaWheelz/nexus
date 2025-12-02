@@ -4,14 +4,15 @@ import Link from "next/link";
 import { useDocumentDetail } from "@/lib/hooks/useDocuments";
 import { isClientError, isNotFoundError, type ClientError } from "@/lib/api/http";
 import type { DocumentListItem } from "@/lib/generated-api";
+import { ReaderLayout } from "@/components/reader/ReaderLayout";
 
 /**
  * Document detail page.
  *
- * Displays full metadata for a single document with:
- * - Loading state
- * - Error state (including special handling for NOT_FOUND)
- * - Processing/failed status messages
+ * Displays document in a 3-pane reader layout with:
+ * - Left: Navigation (placeholder)
+ * - Center: Document metadata (future: reader content)
+ * - Right: Inspector panel with tabs
  */
 export default function DocumentDetailPage({ params }: { params: { documentId: string } }) {
   const { data: document, error, isLoading } = useDocumentDetail(params.documentId);
@@ -63,85 +64,84 @@ export default function DocumentDetailPage({ params }: { params: { documentId: s
     return null;
   }
 
-  // Success state
+  // Success state: render in ReaderLayout
+  return (
+    <ReaderLayout documentId={params.documentId}>
+      <DocumentContent document={document} />
+    </ReaderLayout>
+  );
+}
+
+/**
+ * Document content for the center pane.
+ */
+function DocumentContent({ document }: { document: DocumentListItem }) {
   return (
     <div>
       <Link
         href="/app/documents"
-        className="text-blue-600 hover:text-blue-800 font-medium mb-6 inline-block"
+        className="text-blue-600 hover:text-blue-800 font-medium mb-4 inline-block text-sm"
       >
         ← Back to documents
       </Link>
 
-      <div className="bg-white rounded-lg shadow p-8 mb-8">
-        <div className="mb-6">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            {document.title || "(Untitled)"}
-          </h1>
-          <div className="flex items-center gap-4 flex-wrap">
-            <div>
-              <span className="text-sm text-gray-600">Type:</span>
-              <p className="text-lg font-medium text-gray-900">
-                {document.source_kind.toUpperCase()}
-              </p>
-            </div>
-            <div>
-              <span className="text-sm text-gray-600">Status:</span>
-              <p className="mt-1">
-                <StatusBadge status={document.processing_status} />
-              </p>
-            </div>
-            <div>
-              <span className="text-sm text-gray-600">Created:</span>
-              <p className="text-lg font-medium text-gray-900">
-                {formatDateTime(document.created_at)}
-              </p>
-            </div>
-            <div>
-              <span className="text-sm text-gray-600">Updated:</span>
-              <p className="text-lg font-medium text-gray-900">
-                {formatDateTime(document.updated_at)}
-              </p>
-            </div>
-          </div>
-        </div>
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <h1 className="text-2xl font-bold text-gray-900 mb-4">
+          {document.title || "(Untitled)"}
+        </h1>
 
-        <div className="border-t pt-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Document Details</h2>
-          <div className="grid grid-cols-2 gap-8">
-            <div>
-              <h3 className="text-sm font-medium text-gray-600 mb-2">ID</h3>
-              <p className="text-gray-900 font-mono text-sm break-all">{document.id}</p>
-            </div>
-            <div>
-              <h3 className="text-sm font-medium text-gray-600 mb-2">Processing Status</h3>
-              <p className="text-gray-900 capitalize">{document.processing_status}</p>
-            </div>
-          </div>
-        </div>
-
-        {document.processing_status === "ready" && (
-          <div className="border-t mt-6 pt-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Document Content</h2>
-            <p className="text-gray-600 text-sm mb-4">
-              Document text preview and interaction features coming soon.
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <span className="text-gray-500">Type</span>
+            <p className="font-medium text-gray-900 mt-0.5">
+              {document.source_kind.toUpperCase()}
             </p>
           </div>
-        )}
+          <div>
+            <span className="text-gray-500">Status</span>
+            <p className="mt-0.5">
+              <StatusBadge status={document.processing_status} />
+            </p>
+          </div>
+          <div>
+            <span className="text-gray-500">Created</span>
+            <p className="font-medium text-gray-900 mt-0.5">
+              {formatDateTime(document.created_at)}
+            </p>
+          </div>
+          <div>
+            <span className="text-gray-500">Updated</span>
+            <p className="font-medium text-gray-900 mt-0.5">
+              {formatDateTime(document.updated_at)}
+            </p>
+          </div>
+          <div className="col-span-2">
+            <span className="text-gray-500">ID</span>
+            <p className="font-mono text-xs text-gray-900 mt-0.5 break-all">
+              {document.id}
+            </p>
+          </div>
+        </div>
 
         {document.processing_status === "processing" && (
-          <div className="border-t mt-6 pt-6 bg-blue-50 p-4 rounded">
-            <p className="text-blue-900">
+          <div className="mt-6 bg-blue-50 border border-blue-200 p-4 rounded">
+            <p className="text-blue-900 text-sm">
               This document is currently being processed. Please check back in a moment.
             </p>
           </div>
         )}
 
         {document.processing_status === "failed" && (
-          <div className="border-t mt-6 pt-6 bg-red-50 p-4 rounded">
-            <p className="text-red-900">
+          <div className="mt-6 bg-red-50 border border-red-200 p-4 rounded">
+            <p className="text-red-900 text-sm">
               This document failed to process. Please try uploading it again.
             </p>
+          </div>
+        )}
+
+        {document.processing_status === "ready" && (
+          <div className="mt-6 text-gray-400 text-sm">
+            Document content preview coming soon.
           </div>
         )}
       </div>
@@ -158,7 +158,7 @@ function StatusBadge({ status }: { status: DocumentListItem.processing_status })
   };
 
   return (
-    <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${colors[status]}`}>
+    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${colors[status]}`}>
       {status.charAt(0).toUpperCase() + status.slice(1)}
     </span>
   );
