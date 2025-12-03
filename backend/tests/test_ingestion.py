@@ -244,6 +244,10 @@ def test_ingestion_remap_trigger_first_ingestion(
     db_session: Session, test_user: User, test_html_blob: bytes
 ):
     """Test that first ingestion doesn't trigger remap."""
+    from app.core.deferred_tasks import get_deferred_tasks
+    from app.tasks.documents import chunk_document
+    from app.tasks.remap import remap_highlights_for_document
+
     # Create storage and store blob
     storage = StorageService()
     mock_file = MagicMock()
@@ -266,12 +270,14 @@ def test_ingestion_remap_trigger_first_ingestion(
     # Verify anchored_content_hash is None before ingestion
     assert doc.anchored_content_hash is None
 
-    # Ingest with mocked remap task
-    with patch("app.services.ingestion.remap_highlights_for_document") as mock_remap:
-        run_ingest_document(db_session, str(doc.id))
+    # Ingest
+    run_ingest_document(db_session, str(doc.id))
 
-        # Remap should NOT be triggered on first ingestion
-        mock_remap.delay.assert_not_called()
+    # Check deferred tasks - should have chunk_document but NOT remap
+    deferred = get_deferred_tasks(db_session)
+    task_names = [t[0] for t in deferred]
+    assert chunk_document in task_names
+    assert remap_highlights_for_document not in task_names
 
     db_session.refresh(doc)
 
@@ -279,14 +285,15 @@ def test_ingestion_remap_trigger_first_ingestion(
     assert doc.anchored_content_hash == doc.canonical_hash
 
 
-@patch("app.services.ingestion.remap_highlights_for_document")
 def test_ingestion_remap_trigger_changed_hash(
-    mock_remap,
     db_session: Session,
     test_user: User,
     test_html_blob: bytes,
 ):
     """Test that remap is triggered when canonical_hash changes."""
+    from app.core.deferred_tasks import get_deferred_tasks
+    from app.tasks.remap import remap_highlights_for_document
+
     # Create storage and store blob
     storage = StorageService()
     mock_file = MagicMock()
@@ -310,21 +317,24 @@ def test_ingestion_remap_trigger_changed_hash(
     run_ingest_document(db_session, str(doc.id))
     db_session.refresh(doc)
 
+    # Clear deferred tasks from first ingestion
+    db_session._deferred_tasks = []
+
     # Simulate hash change by setting anchored_content_hash to different value
     doc.anchored_content_hash = "different_old_hash"
-    db_session.commit()
+    db_session.flush()
 
-    # Re-ingest with mocked remap (simulate changed content)
+    # Re-ingest with mocked canonicalize (simulate changed content)
     # First, set status back to pending to allow re-ingestion
     doc.status = "pending"
-    db_session.commit()
+    db_session.flush()
 
     with patch("app.services.ingestion.canonicalize_document") as mock_canonicalize:
         # Return different canonical_hash to simulate extraction algorithm change
         mock_canonicalize.return_value = MagicMock(
             canonical_text="Modified content",
             canonical_hash="new_hash_different",
-            content_hash="new_content_hash_different",  # Different blob content to trigger re-extraction
+            content_hash="new_content_hash_different",
             structure={"type": "html"},
             language="en",
             extractor_version="html-v1",
@@ -333,12 +343,16 @@ def test_ingestion_remap_trigger_changed_hash(
 
         run_ingest_document(db_session, str(doc.id))
 
-        # Remap SHOULD be triggered
-        mock_remap.delay.assert_called_once()
-        call_args = mock_remap.delay.call_args[0]
-        assert call_args[0] == str(doc.id)
-        assert call_args[1] == "different_old_hash"
-        assert call_args[2] == "new_hash_different"
+        # Remap SHOULD be deferred
+        deferred = get_deferred_tasks(db_session)
+        remap_tasks = [t for t in deferred if t[0] == remap_highlights_for_document]
+        assert len(remap_tasks) == 1
+
+        # Verify correct arguments
+        task, args, kwargs = remap_tasks[0]
+        assert args[0] == str(doc.id)
+        assert args[1] == "different_old_hash"
+        assert args[2] == "new_hash_different"
 
 
 def test_ingestion_updates_retries_count(

@@ -31,8 +31,8 @@ try:
 except ImportError:
     lxml_html = None
 
+from app.core.deferred_tasks import defer_task
 from app.services.storage import StorageService
-from app.tasks.remap import remap_highlights_for_document
 
 # HTML extraction limits
 MAX_HTML_INPUT_SIZE = 50 * 1024 * 1024  # 50 MB max for HTML input
@@ -622,14 +622,18 @@ def run_ingest_document(session, document_id) -> dict:
 
     # Trigger remap if canonical_hash changed (and we had anchors before)
     if old_anchored_hash is not None and old_anchored_hash != result.canonical_hash:
-        logger.info(f"Canonical hash changed for {document_id}, enqueuing remap job")
-        remap_highlights_for_document.delay(str(doc_uuid), old_anchored_hash, result.canonical_hash)
+        from app.tasks.remap import remap_highlights_for_document
 
-    # Enqueue chunking job for successful ingestion
+        logger.info(f"Canonical hash changed for {document_id}, deferring remap job")
+        defer_task(
+            session, remap_highlights_for_document, str(doc_uuid), old_anchored_hash, result.canonical_hash
+        )
+
+    # Enqueue chunking job for successful ingestion (deferred until commit)
     from app.tasks.documents import chunk_document
 
-    logger.info(f"Enqueuing chunking job for document {document_id}")
-    chunk_document.delay(str(doc_uuid))
+    logger.info(f"Deferring chunking job for document {document_id}")
+    defer_task(session, chunk_document, str(doc_uuid))
 
     return {
         "status": "success",

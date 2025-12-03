@@ -16,6 +16,7 @@ import logging
 from uuid import UUID
 
 from app.celery_app import celery_app
+from app.core.deferred_tasks import defer_task
 from app.core.errors import ExternalDependencyError
 from app.db.session import get_sync_session_maker
 from app.services.chunking import run_chunk_document
@@ -39,7 +40,8 @@ def ingest_document(self, document_id: str) -> dict:
     This is a thin wrapper that:
     1. Opens a database session
     2. Calls run_ingest_document with the session
-    3. Returns the result
+    3. Commits and fires deferred tasks (after_commit hooks)
+    4. Returns the result
 
     The actual business logic is in run_ingest_document.
 
@@ -53,8 +55,16 @@ def ingest_document(self, document_id: str) -> dict:
         Exception: On failure (triggers Celery retry)
     """
     session_maker = get_sync_session_maker()
-    with session_maker() as session:
-        return run_ingest_document(session, document_id)
+    session = session_maker()
+    try:
+        result = run_ingest_document(session, document_id)
+        session.commit()  # Fires after_commit hooks (deferred tasks)
+        return result
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
 
 @celery_app.task(
@@ -71,7 +81,9 @@ def chunk_document(self, document_id: str) -> dict:
     This is a thin wrapper that:
     1. Opens a database session
     2. Calls run_chunk_document with the session
-    3. Returns the result
+    3. Defers embedding task (published after commit)
+    4. Commits and fires deferred tasks
+    5. Returns the result
 
     The actual business logic is in run_chunk_document.
 
@@ -85,20 +97,29 @@ def chunk_document(self, document_id: str) -> dict:
         Exception: On failure (triggers Celery retry)
     """
     session_maker = get_sync_session_maker()
-    with session_maker() as session:
+    session = session_maker()
+    try:
         doc_uuid = UUID(document_id)
         chunks_created = run_chunk_document(session, doc_uuid)
         logger.info(f"Chunked document {document_id}: {chunks_created} chunks created")
 
         # Wire embedding task in pipeline: chunk → embed
+        # Use defer_task to ensure chunks are committed before embed task runs
         if chunks_created > 0:
-            embed_document.delay(document_id)
-            logger.info(f"Enqueued embedding task for document {document_id}")
+            defer_task(session, embed_document, document_id)
+            logger.info(f"Deferred embedding task for document {document_id}")
+
+        session.commit()  # Fires after_commit hooks (deferred tasks)
 
         return {
             "document_id": document_id,
             "chunks_created": chunks_created,
         }
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
 
 @celery_app.task(
@@ -115,7 +136,8 @@ def embed_document(self, document_id: str) -> dict:
     This is a thin wrapper that:
     1. Opens a database session
     2. Calls run_embed_document with the session
-    3. Returns the result
+    3. Commits the result
+    4. Returns the result
 
     The actual business logic is in run_embed_document.
 
@@ -133,7 +155,8 @@ def embed_document(self, document_id: str) -> dict:
         ValidationAppError: On domain validation failure (no retry)
     """
     session_maker = get_sync_session_maker()
-    with session_maker() as session:
+    session = session_maker()
+    try:
         doc_uuid = UUID(document_id)
         result = run_embed_document(session, doc_uuid)
 
@@ -147,8 +170,15 @@ def embed_document(self, document_id: str) -> dict:
             },
         )
 
+        session.commit()  # Commit embeddings
+
         return {
             "document_id": document_id,
             "total_chunks": result.total_chunks,
             "newly_embedded_chunks": result.newly_embedded_chunks,
         }
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()

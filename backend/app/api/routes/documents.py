@@ -31,6 +31,7 @@ from app.schemas.documents import (
     DocumentUploadResponse,
 )
 from app.schemas.readers import ReaderListResponse, ReaderResponse
+from app.core.deferred_tasks import defer_task
 from app.services.documents import create_document_placeholder, list_documents_for_user
 from app.services.readers import list_readers_for_document as list_readers_service
 from app.services.storage import StorageService
@@ -152,9 +153,9 @@ async def upload_document(
         title=title,
     )
 
-    # Enqueue ingestion task
-    ingest_document.delay(str(doc.id))
-    logger.info(f"Enqueued ingest_document task for document {doc.id}")
+    # Defer ingestion task (published after session commits)
+    defer_task(session, ingest_document, str(doc.id))
+    logger.info(f"Deferred ingest_document task for document {doc.id}")
 
     # Convert to typed ID response
     return DataEnvelope(
