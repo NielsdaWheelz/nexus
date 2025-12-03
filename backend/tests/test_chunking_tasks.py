@@ -78,9 +78,11 @@ class TestIngestionEnqueuesChunking:
     def test_ingestion_enqueues_chunk_document_on_success(
         self, db_session: Session, test_user: User
     ):
-        """Successful ingestion should enqueue chunk_document task."""
+        """Successful ingestion should defer chunk_document task."""
+        from app.core.deferred_tasks import get_deferred_tasks
         from app.services.ingestion import run_ingest_document
         from app.services.storage import StorageService
+        from app.tasks.documents import chunk_document
 
         # Create test HTML blob
         html_blob = b"<html><body><p>Test</p></body></html>"
@@ -106,16 +108,18 @@ class TestIngestionEnqueuesChunking:
 
         doc_id = str(doc.id)
 
-        # Mock chunk_document.delay to verify it's called
-        # The import happens inside run_ingest_document, so we patch the imported function
-        with patch("app.tasks.documents.chunk_document") as mock_chunk_task:
-            result = run_ingest_document(db_session, doc_id)
+        # Run ingestion
+        result = run_ingest_document(db_session, doc_id)
 
-            # Verify ingestion succeeded
-            assert result["status"] == "success"
+        # Verify ingestion succeeded
+        assert result["status"] == "success"
 
-            # Verify chunk_document.delay was called with correct document ID
-            mock_chunk_task.delay.assert_called_once_with(doc_id)
+        # Verify chunk_document was deferred with correct document ID
+        deferred = get_deferred_tasks(db_session)
+        assert len(deferred) == 1
+        task, args, kwargs = deferred[0]
+        assert task == chunk_document
+        assert args == (doc_id,)
 
     def test_ingestion_only_enqueues_on_success_status(self, db_session: Session, test_user: User):
         """Ingestion should only enqueue chunking when status is 'ready'."""
