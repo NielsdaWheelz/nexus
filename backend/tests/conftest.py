@@ -1,12 +1,34 @@
 """Pytest configuration and fixtures for test suite.
 
+IMPORTANT: DATABASE_URL is set at the top of this file BEFORE any app imports.
+This ensures the Settings singleton picks up the test database URL.
+
 This module provides:
 - Database session fixtures with transaction rollback (test isolation)
 - Test client with authenticated user context
 - JWT token fixtures for authentication testing
 - Proper teardown after each test
 - Test database bootstrap via pytest_sessionstart (auto-creates test DB and runs migrations)
+- Celery eager mode auto-enabled for unit tests (non-integration)
 """
+
+# =============================================================================
+# SET TEST DATABASE URL BEFORE ANY APP IMPORTS
+# =============================================================================
+# This MUST happen before importing any app modules, because pydantic-settings
+# creates a singleton on first access. os.environ.setdefault allows Makefile/CI
+# to override by setting DATABASE_URL explicitly before running pytest.
+
+import os
+
+os.environ.setdefault(
+    "DATABASE_URL",
+    "postgresql+psycopg://app_user:password@localhost:5433/test_nexus",
+)
+
+# =============================================================================
+# Now safe to import app modules
+# =============================================================================
 
 from typing import Generator
 
@@ -20,12 +42,17 @@ from app.db.test_bootstrap import ensure_test_database_and_schema
 from app.main import create_app
 
 
+def pytest_configure(config: pytest.Config) -> None:
+    """Register custom markers."""
+    config.addinivalue_line("markers", "integration: integration tests requiring real Celery/Redis")
+
+
 def pytest_sessionstart(session: pytest.Session) -> None:
     """Pytest hook: Run before any tests.
 
     Ensures test database exists and is migrated to Alembic head.
     Fails fast with clear error messages if:
-    - DATABASE_URL_TEST is not set
+    - DATABASE_URL is not set (should never happen - set above)
     - Postgres is unreachable
     - Migrations fail
     """
@@ -39,23 +66,11 @@ def pytest_sessionstart(session: pytest.Session) -> None:
 def test_db_url() -> str:
     """Get test database URL from config.
 
-    DATABASE_URL_TEST is required to run DB-backed tests.
-    Must be set via environment variable or .env file before running pytest.
-
     This fixture assumes ensure_test_database_and_schema() has already run
     via pytest_sessionstart hook, so the test database is ready.
     """
     settings = get_settings()
-    test_db_url = settings.DATABASE_URL_TEST
-
-    if not test_db_url:
-        raise RuntimeError(
-            "DATABASE_URL_TEST is not set. Set it to a Postgres URL "
-            "(e.g., postgresql+psycopg://app_user:password@localhost:5432/test_nexus) "
-            "before running DB-backed tests."
-        )
-
-    return test_db_url
+    return settings.DATABASE_URL
 
 
 @pytest.fixture(scope="session")
@@ -170,3 +185,32 @@ def auth_token2():
     Note: Actual JWT verification is mocked in tests that need it.
     """
     return "mock.jwt.token.user2"
+
+
+# ============================================================================
+# CELERY FIXTURES FOR TASK TESTING
+# ============================================================================
+
+
+@pytest.fixture
+def celery_eager() -> Generator[None, None, None]:
+    """Enable eager mode for testing Celery tasks synchronously.
+
+    Use this fixture in tests that need tasks to execute immediately (e.g., task
+    behavior tests). Do NOT use in tests with transaction rollback that call APIs
+    triggering tasks - the task's separate session won't see uncommitted data.
+
+    For most unit tests, tasks should be mocked instead of run eagerly.
+
+    Example:
+        def test_task_behavior(celery_eager, db_session):
+            # Task will execute synchronously
+            result = my_task("arg")
+    """
+    from app.celery_app import celery_app
+
+    celery_app.conf.task_always_eager = True
+    celery_app.conf.task_eager_propagates = True
+    yield
+    celery_app.conf.task_always_eager = False
+    celery_app.conf.task_eager_propagates = False

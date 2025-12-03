@@ -1,4 +1,4 @@
-.PHONY: help infra infra-up infra-down infra-wait backend-dev frontend-dev backend-test backend-lint backend-format backend-full frontend-test frontend-lint frontend-format frontend-full clean
+.PHONY: help infra infra-up infra-down infra-wait backend-dev frontend-dev backend-test backend-test-integration backend-test-all backend-lint backend-format backend-full frontend-test frontend-lint frontend-format frontend-full test-infra-up test-infra-down clean
 
 help:
 	@echo "Nexus Development Commands"
@@ -13,10 +13,16 @@ help:
 	@echo "  make frontend-dev  Start frontend dev server (Next.js on :3000)"
 	@echo ""
 	@echo "Backend Quality Checks:"
-	@echo "  make backend-test   Run backend tests (isolated test DB, auto cleanup)"
-	@echo "  make backend-lint   Run linters (ruff, black, mypy - check only)"
-	@echo "  make backend-format Auto-format code (black, ruff)"
-	@echo "  make backend-full   Full setup & checks (install + lint + format + test + type-check)"
+	@echo "  make backend-test             Run backend unit tests (isolated test DB, auto cleanup)"
+	@echo "  make backend-test-integration Run integration tests (real Celery/Redis workers)"
+	@echo "  make backend-test-all         Run all backend tests (unit + integration)"
+	@echo "  make backend-lint             Run linters (ruff, black, mypy - check only)"
+	@echo "  make backend-format           Auto-format code (black, ruff)"
+	@echo "  make backend-full             Full setup & checks (install + lint + format + test + type-check)"
+	@echo ""
+	@echo "Test Infrastructure:"
+	@echo "  make test-infra-up   Start test infrastructure (test-db, test-redis, test-worker)"
+	@echo "  make test-infra-down Stop test infrastructure"
 	@echo ""
 	@echo "Frontend Quality Checks:"
 	@echo "  make frontend-test   Run frontend tests"
@@ -91,11 +97,64 @@ backend-test:
 	done
 	@echo "Running database migrations..."
 	cd backend && DATABASE_URL=postgresql+psycopg://app_user:password@localhost:5433/test_nexus .venv/bin/alembic upgrade head
-	@echo "Running backend tests..."
-	cd backend && DATABASE_URL_TEST=postgresql+psycopg://app_user:password@localhost:5433/test_nexus make test
+	@echo "Running backend unit tests..."
+	cd backend && \
+		DATABASE_URL=postgresql+psycopg://app_user:password@localhost:5433/test_nexus \
+		make test-unit
 	@echo "Stopping test database..."
 	docker compose -f infra/docker-compose.yml --profile test down test-db
 	@echo "✓ Test database cleaned up"
+
+# ============================================================================
+# Integration Test Infrastructure
+# ============================================================================
+
+test-infra-up:
+	@echo "Starting test infrastructure (test-db, test-redis, test-worker)..."
+	docker compose -f infra/docker-compose.yml --profile test up -d test-db test-redis test-worker
+	@echo "Waiting for test database to be ready..."
+	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do \
+		if docker compose -f infra/docker-compose.yml --profile test exec -T test-db pg_isready -U app_user -d test_nexus > /dev/null 2>&1; then \
+			echo "✓ Test database is ready"; \
+			break; \
+		fi; \
+		echo "  Waiting for DB... (attempt $$i/15)"; \
+		sleep 1; \
+	done
+	@echo "Waiting for test Redis to be ready..."
+	@for i in 1 2 3 4 5; do \
+		if docker compose -f infra/docker-compose.yml --profile test exec -T test-redis redis-cli ping > /dev/null 2>&1; then \
+			echo "✓ Test Redis is ready"; \
+			break; \
+		fi; \
+		echo "  Waiting for Redis... (attempt $$i/5)"; \
+		sleep 1; \
+	done
+	@echo "Running database migrations..."
+	cd backend && DATABASE_URL=postgresql+psycopg://app_user:password@localhost:5433/test_nexus .venv/bin/alembic upgrade head
+	@echo "✓ Test infrastructure ready"
+
+test-infra-down:
+	@echo "Stopping test infrastructure..."
+	docker compose -f infra/docker-compose.yml --profile test down
+	@echo "✓ Test infrastructure stopped"
+
+backend-test-integration: test-infra-up
+	@echo "Running backend integration tests..."
+	cd backend && \
+		DATABASE_URL=postgresql+psycopg://app_user:password@localhost:5433/test_nexus \
+		REDIS_URL=redis://localhost:6380/1 \
+		make test-integration
+	$(MAKE) test-infra-down
+
+backend-test-all:
+	@echo "Running all backend tests (unit + integration)..."
+	$(MAKE) test-infra-up
+	cd backend && \
+		DATABASE_URL=postgresql+psycopg://app_user:password@localhost:5433/test_nexus \
+		REDIS_URL=redis://localhost:6380/1 \
+		make test-all
+	$(MAKE) test-infra-down
 
 backend-lint:
 	cd backend && make lint

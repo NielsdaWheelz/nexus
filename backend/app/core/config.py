@@ -33,6 +33,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=True,
+        extra="ignore",  # Ignore unknown env vars for backward compatibility
     )
 
     # ========================================================================
@@ -69,13 +70,8 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str = Field(
         default="postgresql+psycopg://app_user:password@localhost:5432/nexus",
-        description="PostgreSQL connection URL for development/production",
-    )
-    DATABASE_URL_TEST: str | None = Field(
-        default=None,
-        description="PostgreSQL test database URL. Required to run DB-backed tests. "
-        "Set to a separate test database (e.g., test_nexus). "
-        "If unset, DB-backed tests will fail with a clear error.",
+        description="PostgreSQL connection URL. For tests, this is set by conftest.py "
+        "to point to the test database. Override via environment variable.",
     )
 
     # ========================================================================

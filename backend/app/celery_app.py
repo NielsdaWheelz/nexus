@@ -54,5 +54,5 @@ celery_app.conf.update(
 #   - acks_late=True (acknowledge after task completes)
 #   - task_reject_on_worker_lost=True (requeue if worker dies)
 
-# Autodiscover tasks from app.tasks package
-celery_app.autodiscover_tasks(["app.tasks"])
+# Autodiscover tasks from app package (searches for app.tasks module)
+celery_app.autodiscover_tasks(["app"])

@@ -65,6 +65,38 @@ services:
     networks:
       - nexus
 
+  test-redis:
+    image: redis:7-alpine
+    container_name: nexus-test-redis
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nexus
+    profiles:
+      - test
+
+  test-worker:
+    build: ../backend
+    container_name: nexus-test-worker
+    command: celery -A app.celery_app worker -Q documents,embeddings -l info
+    depends_on:
+      - test-redis
+      - test-db
+    environment:
+      - DATABASE_URL=postgresql+psycopg://app_user:password@test-db:5432/test_nexus
+      - REDIS_URL=redis://test-redis:6379/1
+    volumes:
+      - ../backend/storage:/app/storage  # Share blob storage with test process
+    networks:
+      - nexus
+    profiles:
+      - test
+
 volumes:
   postgres_data:
 

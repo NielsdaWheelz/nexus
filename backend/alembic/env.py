@@ -92,15 +92,13 @@ def run_migrations_online() -> None:
 
     Uses synchronous SQLAlchemy engine for migrations.
 
-    Database selection priority (for running migrations):
-    1. DATABASE_URL environment variable (explicit override, highest priority)
-    2. DATABASE_URL_TEST environment variable (test environment)
-    3. settings.DATABASE_URL (dev/prod default)
+    Database URL is determined by:
+    1. DATABASE_URL environment variable (if set)
+    2. settings.DATABASE_URL (from .env or defaults)
 
-    For autogenerate (alembic revision), always uses dev DATABASE_URL to compare schema.
+    For tests, conftest.py sets DATABASE_URL before any imports.
     """
     import os
-    import sys
 
     from sqlalchemy import create_engine
 
@@ -108,21 +106,8 @@ def run_migrations_online() -> None:
 
     settings = get_settings()
 
-    # Detect if we're in autogenerate mode by checking command line args
-    # alembic revision is for creating migrations, alembic upgrade is for running them
-    is_autogenerate = "revision" in sys.argv
-
-    if is_autogenerate:
-        # For autogenerate, always use dev database to compare current schema
-        db_url = settings.DATABASE_URL
-    else:
-        # For running migrations, check environment variables first, then fall back to config
-        # This allows both DATABASE_URL and DATABASE_URL_TEST to override settings
-        db_url = (
-            os.environ.get("DATABASE_URL")
-            or os.environ.get("DATABASE_URL_TEST")
-            or settings.DATABASE_URL
-        )
+    # Environment variable takes precedence over settings
+    db_url = os.environ.get("DATABASE_URL") or settings.DATABASE_URL
 
     # Convert async URL to sync for migrations
     if db_url.startswith("postgresql+asyncpg"):

@@ -31,10 +31,8 @@ def empty_migration_db() -> str:
     # Use a different database name to avoid conflicts with normal test DB
     migration_db_name = "test_nexus_migrations"
 
-    if not settings.DATABASE_URL_TEST:
-        pytest.fail("DATABASE_URL_TEST is not set")
-
-    base_url = settings.DATABASE_URL_TEST.rsplit("/", 1)[0]
+    # Get base URL from current DATABASE_URL (strips database name)
+    base_url = settings.DATABASE_URL.rsplit("/", 1)[0]
     migration_db_url = f"{base_url}/{migration_db_name}"
 
     # Connect to postgres database to create migration test DB
@@ -85,21 +83,20 @@ def test_migrations_create_all_tables(empty_migration_db: str):
 
     cfg = Config(str(alembic_ini))
 
-    # IMPORTANT: alembic/env.py reads DATABASE_URL_TEST from os.environ,
-    # so we must set it there, not just via cfg.set_main_option()
-    original_env = os.environ.get("DATABASE_URL_TEST")
+    # Override DATABASE_URL to point to the empty migration test database
+    original_db_url = os.environ.get("DATABASE_URL")
     try:
-        os.environ["DATABASE_URL_TEST"] = empty_migration_db
+        os.environ["DATABASE_URL"] = empty_migration_db
 
         # Run migrations
         command.upgrade(cfg, "head")
 
     finally:
-        # Restore original environment
-        if original_env is not None:
-            os.environ["DATABASE_URL_TEST"] = original_env
+        # Restore original DATABASE_URL
+        if original_db_url is not None:
+            os.environ["DATABASE_URL"] = original_db_url
         else:
-            os.environ.pop("DATABASE_URL_TEST", None)
+            os.environ.pop("DATABASE_URL", None)
 
     # Verify tables were created
     engine = create_engine(empty_migration_db)
@@ -124,7 +121,7 @@ def test_migrations_create_all_tables(empty_migration_db: str):
         pytest.fail(
             f"Migration did not create expected tables: {missing_tables}. "
             f"Found tables: {tables}. "
-            f"The Alembic migration 1c62073ec151_initial_schema.py is broken. "
+            f"The Alembic migration ff2d3eadcd14_initial_schema.py is broken. "
             f"Fix the migration - do NOT add create_all() as a workaround."
         )
 
@@ -146,10 +143,10 @@ def test_migration_is_idempotent(empty_migration_db: str):
 
     cfg = Config(str(alembic_ini))
 
-    # Set DATABASE_URL_TEST environment variable for alembic/env.py
-    original_env = os.environ.get("DATABASE_URL_TEST")
+    # Override DATABASE_URL to point to the empty migration test database
+    original_db_url = os.environ.get("DATABASE_URL")
     try:
-        os.environ["DATABASE_URL_TEST"] = empty_migration_db
+        os.environ["DATABASE_URL"] = empty_migration_db
 
         # Run migrations first time
         command.upgrade(cfg, "head")
@@ -158,11 +155,11 @@ def test_migration_is_idempotent(empty_migration_db: str):
         command.upgrade(cfg, "head")
 
     finally:
-        # Restore original environment
-        if original_env is not None:
-            os.environ["DATABASE_URL_TEST"] = original_env
+        # Restore original DATABASE_URL
+        if original_db_url is not None:
+            os.environ["DATABASE_URL"] = original_db_url
         else:
-            os.environ.pop("DATABASE_URL_TEST", None)
+            os.environ.pop("DATABASE_URL", None)
 
     # Verify tables still exist and nothing broke
     engine = create_engine(empty_migration_db)
