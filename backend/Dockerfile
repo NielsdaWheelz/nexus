@@ -14,5 +14,11 @@ RUN pip install uv && uv sync --all-extras
 # Install Node.js dependencies (production only)
 RUN npm install --production
 
+# Ensure venv binaries are in PATH (uv creates .venv in /app)
+ENV PATH="/app/.venv/bin:$PATH"
+
+# Set Python path to ensure app module is importable
+ENV PYTHONPATH="/app:$PYTHONPATH"
+
 # Default command: run Celery worker
 CMD ["celery", "-A", "app.celery_app", "worker", "-Q", "documents,embeddings", "-l", "info"]
