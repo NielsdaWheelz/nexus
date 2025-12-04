@@ -200,33 +200,69 @@ class CreateHighlightRequest(BaseModel):
     """Request body for POST /highlights.
 
     Generic highlight creation endpoint supporting multiple media types and anchor types.
-    For v1, only media_type="document" with anchor_type="text" is supported.
+    For v1, media_type="document" with anchor_type="text" (HTML/EPUB) or "pdf" (PDF) is supported.
 
-    Accepts a character-range anchor (text_start, text_end) which will be
-    validated and mapped to the richer internal anchor format by the route handler.
+    Anchor Types:
+    - "text": Character offsets into canonical_text (for HTML/EPUB documents)
+    - "pdf": PDF.js text layer offsets + page number (for PDF documents)
 
-    Offset Semantics (v1):
+    Text Anchor Offset Semantics:
         text_start and text_end are zero-indexed positions into canonical_text
         treated as a sequence of Unicode code points. For practical purposes,
         treat them as Python/JS string indices.
 
+    PDF Anchor Offset Semantics:
+        text_start and text_end are GLOBAL character offsets in the pdf.js text stream
+        (concatenation of all page text items). pdf_page_number and pdf_char_offset
+        provide per-page coordinates for efficient rendering.
+
     Attributes:
         media_type: Type of media to highlight ("document" only for v1)
         media_id: Typed media ID (e.g., doc_<uuid> for documents)
-        anchor_type: Type of anchor ("text" only for html/epub in v1)
-        text_start: Character offset start in canonical_text (>= 0)
-        text_end: Character offset end in canonical_text (> text_start)
+        anchor_type: Type of anchor ("text" for html/epub, "pdf" for pdf)
+        text_start: Character offset start (>= 0)
+        text_end: Character offset end (> text_start)
+        pdf_page_number: PDF page number (1-based, required for anchor_type="pdf")
+        pdf_char_offset: Character offset within page (required for anchor_type="pdf")
     """
 
     media_type: Literal["document"] = Field(
         description="Type of media to highlight (only 'document' supported in v1)"
     )
     media_id: str = Field(description="Typed media ID (e.g., doc_<uuid> for documents)")
-    anchor_type: Literal["text"] = Field(
-        description="Type of anchor (only 'text' supported for html/epub in v1)"
+    anchor_type: Literal["text", "pdf"] = Field(
+        description="Type of anchor ('text' for html/epub, 'pdf' for pdf)"
     )
     text_start: int = Field(ge=0, description="Character offset start (>= 0)")
     text_end: int = Field(gt=0, description="Character offset end (> text_start)")
+    # PDF anchor fields (required for anchor_type="pdf")
+    pdf_page_number: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="PDF page number (1-based, required for anchor_type='pdf')"
+    )
+    pdf_char_offset: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Character offset within page (required for anchor_type='pdf')"
+    )
+    # Quote and context (required for anchor_type="pdf", computed server-side for "text")
+    # For PDF anchors, these come from pdf.js text layer since backend can't access it
+    quote: Optional[str] = Field(
+        default=None,
+        max_length=10000,
+        description="Selected text (required for anchor_type='pdf', computed for 'text')"
+    )
+    prefix: Optional[str] = Field(
+        default=None,
+        max_length=64,
+        description="Context before quote (required for anchor_type='pdf', computed for 'text')"
+    )
+    suffix: Optional[str] = Field(
+        default=None,
+        max_length=64,
+        description="Context after quote (required for anchor_type='pdf', computed for 'text')"
+    )
 
     @field_validator("text_end")
     @classmethod
@@ -234,6 +270,37 @@ class CreateHighlightRequest(BaseModel):
         """Ensure text_end > text_start."""
         if "text_start" in info.data and v <= info.data["text_start"]:
             raise ValueError("text_end must be greater than text_start")
+        return v
+
+    @field_validator("pdf_page_number")
+    @classmethod
+    def validate_pdf_page_for_pdf_anchor(cls, v: Optional[int], info) -> Optional[int]:
+        """Ensure pdf_page_number is provided for PDF anchors."""
+        anchor_type = info.data.get("anchor_type")
+        if anchor_type == "pdf" and v is None:
+            raise ValueError("pdf_page_number is required for anchor_type='pdf'")
+        if anchor_type == "text" and v is not None:
+            raise ValueError("pdf_page_number must not be set for anchor_type='text'")
+        return v
+
+    @field_validator("pdf_char_offset")
+    @classmethod
+    def validate_pdf_offset_for_pdf_anchor(cls, v: Optional[int], info) -> Optional[int]:
+        """Ensure pdf_char_offset is provided for PDF anchors."""
+        anchor_type = info.data.get("anchor_type")
+        if anchor_type == "pdf" and v is None:
+            raise ValueError("pdf_char_offset is required for anchor_type='pdf'")
+        if anchor_type == "text" and v is not None:
+            raise ValueError("pdf_char_offset must not be set for anchor_type='text'")
+        return v
+
+    @field_validator("quote")
+    @classmethod
+    def validate_quote_for_pdf_anchor(cls, v: Optional[str], info) -> Optional[str]:
+        """Ensure quote is provided for PDF anchors (backend can't compute from pdf.js)."""
+        anchor_type = info.data.get("anchor_type")
+        if anchor_type == "pdf" and not v:
+            raise ValueError("quote is required for anchor_type='pdf'")
         return v
 
 

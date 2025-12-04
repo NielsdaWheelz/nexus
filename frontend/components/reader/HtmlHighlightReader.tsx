@@ -3,6 +3,7 @@
 import { useMemo, useCallback, useRef, useEffect, useState } from "react";
 import { useUIStore } from "@/lib/state/ui";
 import { useCreateHighlight } from "@/lib/hooks/useHighlights";
+import { useSelectionDismiss } from "@/lib/hooks/useSelectionDismiss";
 import { resolveSelectionToCanonicalOffsets } from "@/lib/anchoring/core";
 import type { HighlightItem } from "@/lib/api/highlights";
 
@@ -323,6 +324,7 @@ export function HtmlHighlightReader({
 
     try {
       const highlight = await createHighlight({
+        anchorType: "text",
         textStart: pendingSelection.textStart,
         textEnd: pendingSelection.textEnd,
       });
@@ -353,42 +355,17 @@ export function HtmlHighlightReader({
   }, []);
 
   /**
-   * Handle escape key to cancel selection.
-   */
-  useEffect(() => {
-    if (!pendingSelection) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        handleCancelSelection();
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [pendingSelection, handleCancelSelection]);
-
-  /**
-   * Handle click outside the selection action bar to dismiss.
-   * We listen for mousedown outside the action bar when selection is pending.
+   * Ref for the selection action bar (used for click-outside detection).
    */
   const actionBarRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!pendingSelection) return;
-
-    const handleClickOutside = (e: MouseEvent) => {
-      const actionBar = actionBarRef.current;
-      if (actionBar && !actionBar.contains(e.target as Node)) {
-        // Click was outside the action bar - clear selection
-        handleCancelSelection();
-      }
-    };
-
-    // Use mousedown so we catch clicks before they potentially create a new selection
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [pendingSelection, handleCancelSelection]);
+  // Handle escape key and click-outside to dismiss selection
+  // Factored into a hook for testability
+  useSelectionDismiss({
+    isActive: !!pendingSelection,
+    onDismiss: handleCancelSelection,
+    excludeRef: actionBarRef,
+  });
 
   // Empty state
   if (!canonicalText) {

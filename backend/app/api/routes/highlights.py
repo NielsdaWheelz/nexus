@@ -101,11 +101,11 @@ async def create_highlight_endpoint(
             details={"field": "media_type", "value": request.media_type, "supported": ["document"]},
         )
 
-    # v1: Only support text anchor type for documents
-    if request.anchor_type != "text":
+    # v1: Support both text and pdf anchor types for documents
+    if request.anchor_type not in ("text", "pdf"):
         raise ValidationAppError(
-            message=f"Unsupported anchor_type: '{request.anchor_type}'. Only 'text' is supported for documents in v1.",
-            details={"field": "anchor_type", "value": request.anchor_type, "supported": ["text"]},
+            message=f"Unsupported anchor_type: '{request.anchor_type}'.",
+            details={"field": "anchor_type", "value": request.anchor_type, "supported": ["text", "pdf"]},
         )
 
     # Parse and validate media_id
@@ -140,10 +140,6 @@ async def create_highlight_endpoint(
             details={"resource_type": "document"},
         )
 
-    # Get canonical text (using codepoint/string semantics, not bytes)
-    canonical_text = doc.canonical_text
-    text_length = len(canonical_text)
-
     # Validate character range
     if request.text_start < 0:
         raise ValidationAppError(
@@ -161,26 +157,55 @@ async def create_highlight_endpoint(
             },
         )
 
-    if request.text_end > text_length:
-        raise ValidationAppError(
-            message=f"text_end ({request.text_end}) exceeds canonical_text length ({text_length})",
-            details={
-                "field": "text_end",
-                "value": request.text_end,
-                "text_length": text_length,
-            },
-        )
+    # Compute quote, prefix, suffix based on anchor type
+    if request.anchor_type == "text":
+        # Text anchor: extract from canonical text (HTML/EPUB)
+        canonical_text = doc.canonical_text
+        text_length = len(canonical_text)
 
-    # Extract quote, prefix, suffix from canonical text (using string slicing)
-    quote = canonical_text[request.text_start : request.text_end]
+        if request.text_end > text_length:
+            raise ValidationAppError(
+                message=f"text_end ({request.text_end}) exceeds canonical_text length ({text_length})",
+                details={
+                    "field": "text_end",
+                    "value": request.text_end,
+                    "text_length": text_length,
+                },
+            )
 
-    # Prefix: up to 64 characters before start
-    prefix_start = max(0, request.text_start - 64)
-    prefix = canonical_text[prefix_start : request.text_start]
+        # Extract quote, prefix, suffix from canonical text (using string slicing)
+        quote = canonical_text[request.text_start : request.text_end]
 
-    # Suffix: up to 64 characters after end
-    suffix_end = min(text_length, request.text_end + 64)
-    suffix = canonical_text[request.text_end : suffix_end]
+        # Prefix: up to 64 characters before start
+        prefix_start = max(0, request.text_start - 64)
+        prefix = canonical_text[prefix_start : request.text_start]
+
+        # Suffix: up to 64 characters after end
+        suffix_end = min(text_length, request.text_end + 64)
+        suffix = canonical_text[request.text_end : suffix_end]
+
+        pdf_page_number = None
+        pdf_char_offset = None
+    else:
+        # PDF anchor: quote/prefix/suffix come from frontend (pdf.js text layer)
+        # Backend cannot compute these since it doesn't have access to pdf.js extraction
+        quote = request.quote
+        prefix = request.prefix or ""
+        suffix = request.suffix or ""
+        pdf_page_number = request.pdf_page_number
+        pdf_char_offset = request.pdf_char_offset
+
+        # Validate quote matches expected length from offsets
+        expected_length = request.text_end - request.text_start
+        if len(quote) != expected_length:
+            raise ValidationAppError(
+                message=f"quote length ({len(quote)}) does not match offset range ({expected_length})",
+                details={
+                    "field": "quote",
+                    "quote_length": len(quote),
+                    "expected_length": expected_length,
+                },
+            )
 
     # Create highlight via service layer
     highlight_summary = create_highlight(
@@ -194,6 +219,8 @@ async def create_highlight_endpoint(
         quote=quote,
         prefix=prefix,
         suffix=suffix,
+        pdf_page_number=pdf_page_number,
+        pdf_char_offset=pdf_char_offset,
     )
 
     # Convert to API response (with typed IDs, anchor fields, and quote)

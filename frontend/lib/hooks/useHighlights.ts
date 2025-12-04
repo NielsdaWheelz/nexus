@@ -118,11 +118,27 @@ export function useDocumentHighlights(
 }
 
 /**
+ * Parameters for creating a highlight via the hook (documentId provided separately).
+ */
+export type CreateHighlightHookParams =
+  | { anchorType: "text"; textStart: number; textEnd: number }
+  | {
+      anchorType: "pdf";
+      textStart: number;
+      textEnd: number;
+      pdfPageNumber: number;
+      pdfCharOffset: number;
+      quote: string;
+      prefix?: string;
+      suffix?: string;
+    };
+
+/**
  * Return type for useCreateHighlight hook.
  */
 export interface UseCreateHighlightResult {
   /** Trigger highlight creation */
-  createHighlight: (params: Omit<CreateHighlightParams, "documentId">) => Promise<HighlightItem>;
+  createHighlight: (params: CreateHighlightHookParams) => Promise<HighlightItem>;
   /** Whether a creation is in progress */
   isPending: boolean;
   /** Whether the last creation failed */
@@ -145,34 +161,56 @@ export interface UseCreateHighlightResult {
  * @param documentId - The document ID to create highlights on
  * @returns Mutation controls and state
  *
- * @example
+ * @example Text highlight (HTML/EPUB):
  * ```tsx
- * const { createHighlight, isPending, isError } = useCreateHighlight(documentId);
+ * const { createHighlight, isPending } = useCreateHighlight(documentId);
+ * const highlight = await createHighlight({
+ *   anchorType: "text",
+ *   textStart: 100,
+ *   textEnd: 150,
+ * });
+ * ```
  *
- * const handleSelection = async (textStart: number, textEnd: number) => {
- *   try {
- *     const highlight = await createHighlight({ textStart, textEnd });
- *     console.log("Created:", highlight.id);
- *   } catch (error) {
- *     console.error("Failed:", error);
- *   }
- * };
+ * @example PDF highlight:
+ * ```tsx
+ * const { createHighlight, isPending } = useCreateHighlight(documentId);
+ * const highlight = await createHighlight({
+ *   anchorType: "pdf",
+ *   textStart: 500,
+ *   textEnd: 550,
+ *   pdfPageNumber: 3,
+ *   pdfCharOffset: 100,
+ *   quote: "selected text",
+ *   prefix: "before ",
+ *   suffix: " after",
+ * });
  * ```
  */
 export function useCreateHighlight(documentId: string): UseCreateHighlightResult {
   const queryClient = useQueryClient();
 
-  const mutation = useMutation<
-    HighlightItem,
-    ClientError,
-    Omit<CreateHighlightParams, "documentId">
-  >({
+  const mutation = useMutation<HighlightItem, ClientError, CreateHighlightHookParams>({
     mutationFn: async (params) => {
-      return createHighlight({
-        documentId,
-        textStart: params.textStart,
-        textEnd: params.textEnd,
-      });
+      if (params.anchorType === "text") {
+        return createHighlight({
+          documentId,
+          anchorType: "text",
+          textStart: params.textStart,
+          textEnd: params.textEnd,
+        });
+      } else {
+        return createHighlight({
+          documentId,
+          anchorType: "pdf",
+          textStart: params.textStart,
+          textEnd: params.textEnd,
+          pdfPageNumber: params.pdfPageNumber,
+          pdfCharOffset: params.pdfCharOffset,
+          quote: params.quote,
+          prefix: params.prefix,
+          suffix: params.suffix,
+        });
+      }
     },
     onSuccess: () => {
       // Invalidate the highlights list to trigger refetch
@@ -184,7 +222,7 @@ export function useCreateHighlight(documentId: string): UseCreateHighlightResult
 
   // Wrap mutateAsync in a stable callback
   const createHighlightFn = useCallback(
-    async (params: Omit<CreateHighlightParams, "documentId">) => {
+    async (params: CreateHighlightHookParams) => {
       return mutation.mutateAsync(params);
     },
     [mutation]
