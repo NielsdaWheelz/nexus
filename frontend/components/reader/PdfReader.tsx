@@ -1,7 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useDocumentBlob } from "@/lib/hooks/useDocumentBlob";
+import { useDocumentHighlights } from "@/lib/hooks/useHighlights";
+import { useUIStore } from "@/lib/state/ui";
+import {
+  applyPdfHighlightsToPage,
+  clearPdfHighlightsFromPage,
+  findHighlightElement,
+} from "@/lib/anchoring/pdfAnchoring";
+import type { PdfHighlightAnchor } from "@/lib/anchoring/pdfAnchoring";
 import type { DocumentListItem } from "@/lib/generated-api";
 
 // PDF.js types
@@ -74,13 +82,15 @@ const INITIAL_PAGE_COUNT = 3;
 const PAGE_INCREMENT = 3;
 
 /**
- * PdfReader - Read-only PDF renderer using pdf.js.
+ * PdfReader - Read-only PDF renderer using pdf.js with highlight support.
  *
  * Features:
  * - Renders PDF pages with canvas for visuals
- * - Creates text layer overlay for future anchoring
+ * - Creates text layer overlay for anchoring highlights
  * - Progressive loading: loads first N pages, then more as user scrolls
  * - Text layer spans have data-page-number and data-char-offset attributes
+ * - Renders highlights as overlays on the text layer
+ * - Integrates with UI store for active highlight state
  *
  * TEXT LAYER ANCHOR SEMANTICS (data-char-offset):
  * See: spec/anchors.md § 1.3.1 Offset Semantics
@@ -110,10 +120,17 @@ const PAGE_INCREMENT = 3;
  * re-processed from scratch to ensure correct global offsets. This is correct
  * but potentially slow for large documents (optimization opportunity).
  *
- * This is read-only in PR8. No highlight selection or creation.
+ * PR9: Read-only highlight rendering. No highlight creation yet.
  */
 export function PdfReader({ documentId, document }: PdfReaderProps) {
   const { data: pdfBuffer, isLoading, isError, error } = useDocumentBlob(documentId);
+  
+  // Fetch highlights for this document
+  const { highlights } = useDocumentHighlights(documentId);
+  
+  // UI store for active highlight state
+  const activeHighlightId = useUIStore((s) => s.activeHighlightId);
+  const setActiveHighlightId = useUIStore((s) => s.setActiveHighlightId);
   
   // PDF document reference
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
@@ -130,6 +147,100 @@ export function PdfReader({ documentId, document }: PdfReaderProps) {
   // Container ref for scroll detection
   const containerRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // Compute page offset ranges for filtering highlights
+  // This maps page numbers to their global character offset ranges
+  const pageOffsetRanges = useMemo(() => {
+    const ranges: Array<{ pageNumber: number; minOffset: number; maxOffset: number }> = [];
+    for (const page of pages) {
+      if (page.textItems.length === 0) {
+        ranges.push({ pageNumber: page.pageNumber, minOffset: 0, maxOffset: 0 });
+      } else {
+        const minOffset = page.textItems[0].charOffset;
+        const lastItem = page.textItems[page.textItems.length - 1];
+        const maxOffset = lastItem.charOffset + lastItem.str.length;
+        ranges.push({ pageNumber: page.pageNumber, minOffset, maxOffset });
+      }
+    }
+    return ranges;
+  }, [pages]);
+
+  // Filter PDF highlights and convert to PdfHighlightAnchor format per page
+  // PDF highlights use pdf_page_number + pdf_char_offset (per-page coordinates)
+  // We convert to global character offsets for the text layer DOM
+  const highlightsByPage = useMemo(() => {
+    const byPage = new Map<number, PdfHighlightAnchor[]>();
+    
+    // Only process PDF anchor highlights for the PDF reader
+    const pdfHighlights = highlights.filter((h) => h.anchor_type === "pdf");
+    
+    for (const h of pdfHighlights) {
+      // PDF highlights must have page number and char offset
+      if (h.pdf_page_number == null || h.pdf_char_offset == null) {
+        if (process.env.NODE_ENV === "development") {
+          console.warn(
+            `[PdfReader] PDF highlight ${h.id} missing pdf_page_number or pdf_char_offset`
+          );
+        }
+        continue;
+      }
+
+      const pageNumber = h.pdf_page_number;
+      const pageRange = pageOffsetRanges.find((r) => r.pageNumber === pageNumber);
+      
+      if (!pageRange) {
+        // Page not rendered yet (lazy loading); skip for now
+        continue;
+      }
+
+      // Convert per-page offset to global offset
+      // pdf_char_offset is the offset within the page
+      // Global offset = page start offset + per-page offset
+      const globalCharStart = pageRange.minOffset + h.pdf_char_offset;
+      const globalCharEnd = globalCharStart + h.quote.length;
+
+      // Sanity check: don't exceed page bounds
+      if (globalCharEnd > pageRange.maxOffset) {
+        if (process.env.NODE_ENV === "development") {
+          console.warn(
+            `[PdfReader] PDF highlight ${h.id} extends beyond page ${pageNumber} bounds`
+          );
+        }
+      }
+
+      const anchor: PdfHighlightAnchor = {
+        highlightId: h.id,
+        charStart: globalCharStart,
+        charEnd: globalCharEnd,
+        color: h.color,
+        isActive: h.id === activeHighlightId,
+      };
+
+      const existing = byPage.get(pageNumber) || [];
+      existing.push(anchor);
+      byPage.set(pageNumber, existing);
+    }
+    
+    return byPage;
+  }, [highlights, pageOffsetRanges, activeHighlightId]);
+
+  // Handle click on a highlight span
+  const handleHighlightClick = useCallback(
+    (highlightId: string) => {
+      setActiveHighlightId(highlightId);
+    },
+    [setActiveHighlightId]
+  );
+
+  // Scroll to active highlight when it changes (triggered from inspector)
+  useEffect(() => {
+    if (!activeHighlightId || !containerRef.current) return;
+
+    const element = findHighlightElement(containerRef.current, activeHighlightId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [activeHighlightId]);
 
   // Load PDF document when buffer is available
   useEffect(() => {
@@ -343,6 +454,9 @@ export function PdfReader({ documentId, document }: PdfReaderProps) {
           width={page.width}
           height={page.height}
           textItems={page.textItems}
+          highlights={highlightsByPage.get(page.pageNumber) || []}
+          activeHighlightId={activeHighlightId}
+          onHighlightClick={handleHighlightClick}
         />
       ))}
 
@@ -369,13 +483,29 @@ interface PdfPageProps {
   width: number;
   height: number;
   textItems: TextLayerItem[];
+  /** Highlights to render on this page */
+  highlights: PdfHighlightAnchor[];
+  /** Currently active highlight ID */
+  activeHighlightId: string | null;
+  /** Callback when a highlight is clicked */
+  onHighlightClick: (highlightId: string) => void;
 }
 
 /**
  * Individual PDF page with canvas and text layer.
  */
-function PdfPage({ pageNumber, pdfDoc, width, height, textItems }: PdfPageProps) {
+function PdfPage({
+  pageNumber,
+  pdfDoc,
+  width,
+  height,
+  textItems,
+  highlights,
+  activeHighlightId,
+  onHighlightClick,
+}: PdfPageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const textLayerRef = useRef<HTMLDivElement>(null);
   const [isRendered, setIsRendered] = useState(false);
 
   // Render canvas when component mounts
@@ -420,6 +550,35 @@ function PdfPage({ pageNumber, pdfDoc, width, height, textItems }: PdfPageProps)
     };
   }, [pdfDoc, pageNumber, isRendered]);
 
+  // Apply highlights to the text layer after rendering
+  useEffect(() => {
+    const textLayer = textLayerRef.current;
+    if (!textLayer || highlights.length === 0) return;
+
+    // Clear existing highlights before re-applying
+    clearPdfHighlightsFromPage(textLayer);
+
+    // Apply highlights with current active state
+    const anchorsWithActiveState = highlights.map((h) => ({
+      ...h,
+      isActive: h.highlightId === activeHighlightId,
+    }));
+
+    applyPdfHighlightsToPage(textLayer, anchorsWithActiveState);
+  }, [highlights, activeHighlightId]);
+
+  // Handle click events on the text layer (delegate to highlight spans)
+  const handleTextLayerClick = useCallback(
+    (e: React.MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const highlightId = target.getAttribute("data-highlight-id");
+      if (highlightId) {
+        onHighlightClick(highlightId);
+      }
+    },
+    [onHighlightClick]
+  );
+
   return (
     <div
       className="pdf-page relative mb-4 shadow-lg bg-white"
@@ -434,11 +593,13 @@ function PdfPage({ pageNumber, pdfDoc, width, height, textItems }: PdfPageProps)
         data-testid={`pdf-canvas-${pageNumber}`}
       />
 
-      {/* Text layer for selection and future anchoring */}
+      {/* Text layer for selection and highlight anchoring */}
       <div
+        ref={textLayerRef}
         className="pdf-text-layer absolute top-0 left-0 right-0 bottom-0 overflow-hidden pointer-events-none"
         style={{ width, height }}
         data-testid={`pdf-text-layer-${pageNumber}`}
+        onClick={handleTextLayerClick}
       >
         {textItems.map((item, idx) => (
           <span

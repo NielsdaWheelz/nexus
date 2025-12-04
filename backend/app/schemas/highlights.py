@@ -242,27 +242,39 @@ class HighlightItem(BaseModel):
 
     All IDs are typed (e.g., hl_<uuid>, doc_<uuid>).
 
-    Offset Semantics (v1):
+    Offset Semantics:
         text_start and text_end are zero-indexed positions into canonical_text
         treated as a sequence of Unicode code points. For practical purposes,
         treat them as Python/JS string indices. This keeps frontend/backend
         semantically aligned without byte↔codepoint mapping.
 
+        For PDF anchors (anchor_type="pdf"), the primary anchoring coordinates are
+        pdf_page_number and pdf_char_offset, NOT text_start/text_end. The frontend
+        should use the PDF-specific fields for rendering PDF highlights.
+
     Attributes:
         id: Typed highlight ID (hl_<uuid>)
         document_id: Typed document ID (doc_<uuid>)
+        anchor_type: Type of anchor (text, pdf, transcript)
         text_start: Character offset start in canonical_text (codepoint index)
         text_end: Character offset end in canonical_text (codepoint index)
         quote: The exact text at [text_start:text_end]
+        color: Highlight color (yellow, blue, green, pink, purple)
+        pdf_page_number: PDF page number (1-based, only for anchor_type="pdf")
+        pdf_char_offset: Character offset within the page (only for anchor_type="pdf")
         created_at: UTC timestamp of creation
         updated_at: UTC timestamp of last update
     """
 
     id: str = Field(description="Typed highlight ID (hl_<uuid>)")
     document_id: str = Field(description="Typed document ID (doc_<uuid>)")
+    anchor_type: Literal["text", "pdf", "transcript"] = Field(description="Type of anchor")
     text_start: int = Field(description="Character offset start (codepoint index)")
     text_end: int = Field(description="Character offset end (codepoint index)")
     quote: str = Field(description="The highlighted text at [text_start:text_end]")
+    color: str = Field(description="Highlight color (yellow, blue, green, pink, purple)")
+    pdf_page_number: Optional[int] = Field(default=None, description="PDF page number (1-based, PDF anchors only)")
+    pdf_char_offset: Optional[int] = Field(default=None, description="Character offset within page (PDF anchors only)")
     created_at: datetime = Field(description="UTC timestamp of creation")
     updated_at: Optional[datetime] = Field(default=None, description="UTC timestamp of last update")
 

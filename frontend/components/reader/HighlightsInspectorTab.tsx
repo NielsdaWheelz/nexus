@@ -46,6 +46,22 @@ function getDisplayQuote(highlight: HighlightItem): string {
 }
 
 /**
+ * Get Tailwind color class for highlight marker based on highlight color.
+ */
+function getHighlightColorClass(color: string, isActive: boolean): string {
+  const colorMap: Record<string, { active: string; inactive: string }> = {
+    yellow: { active: "bg-yellow-400", inactive: "bg-yellow-200" },
+    blue: { active: "bg-blue-400", inactive: "bg-blue-200" },
+    green: { active: "bg-green-400", inactive: "bg-green-200" },
+    pink: { active: "bg-pink-400", inactive: "bg-pink-200" },
+    purple: { active: "bg-purple-400", inactive: "bg-purple-200" },
+  };
+  
+  const colors = colorMap[color] || colorMap.yellow;
+  return isActive ? colors.active : colors.inactive;
+}
+
+/**
  * HighlightsInspectorTab - Inspector panel content for the highlights tab.
  *
  * Displays a scrollable list of highlights with:
@@ -158,12 +174,12 @@ export function HighlightsInspectorTab({
               }
             `}
           >
-            {/* Quote snippet with highlight marker */}
+            {/* Quote snippet with highlight marker (color from highlight) */}
             <div className="flex items-start gap-2">
               <div
                 className={`
                   w-1 h-full min-h-[2rem] rounded-full flex-shrink-0
-                  ${isActive ? "bg-yellow-400" : "bg-yellow-200"}
+                  ${getHighlightColorClass(highlight.color, isActive)}
                 `}
               />
               <div className="flex-1 min-w-0">

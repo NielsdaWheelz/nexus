@@ -39,7 +39,7 @@ export { DocumentListItem } from './models/DocumentListItem';
 export type { DocumentListResponse } from './models/DocumentListResponse';
 export { DocumentUploadResponse } from './models/DocumentUploadResponse';
 export type { HealthStatus } from './models/HealthStatus';
-export type { HighlightItem } from './models/HighlightItem';
+export { HighlightItem } from './models/HighlightItem';
 export type { HighlightListResponse } from './models/HighlightListResponse';
 export type { HTTPValidationError } from './models/HTTPValidationError';
 export { MessageListItem } from './models/MessageListItem';

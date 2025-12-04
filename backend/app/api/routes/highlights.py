@@ -196,14 +196,18 @@ async def create_highlight_endpoint(
         suffix=suffix,
     )
 
-    # Convert to API response (with typed IDs and quote)
+    # Convert to API response (with typed IDs, anchor fields, and quote)
     return DataEnvelope(
         data=HighlightItem(
             id=to_api_id("highlight", highlight_summary.id),
             document_id=to_api_id("document", highlight_summary.media_id),
+            anchor_type=highlight_summary.anchor_type,
             text_start=highlight_summary.text_start,
             text_end=highlight_summary.text_end,
             quote=highlight_summary.quote,
+            color=highlight_summary.color,
+            pdf_page_number=highlight_summary.pdf_page_number,
+            pdf_char_offset=highlight_summary.pdf_char_offset,
             created_at=highlight_summary.created_at,
             updated_at=highlight_summary.updated_at,
         )
@@ -284,16 +288,20 @@ async def list_document_highlights(
         pagination=PaginationParams(limit=limit, cursor=cursor),
     )
 
-    # Convert to API response (with typed IDs and quote)
+    # Convert to API response (with typed IDs, anchor fields, and quote)
     return DataEnvelope(
         data=HighlightListResponse(
             items=[
                 HighlightItem(
                     id=to_api_id("highlight", hl.id),
                     document_id=to_api_id("document", hl.media_id),
+                    anchor_type=hl.anchor_type,
                     text_start=hl.text_start,
                     text_end=hl.text_end,
                     quote=hl.quote,
+                    color=hl.color,
+                    pdf_page_number=hl.pdf_page_number,
+                    pdf_char_offset=hl.pdf_char_offset,
                     created_at=hl.created_at,
                     updated_at=hl.updated_at,
                 )
@@ -431,16 +439,20 @@ async def list_user_highlights(
             }
         )
 
-    # Convert to API response (with typed IDs and quote)
+    # Convert to API response (with typed IDs, anchor fields, and quote)
     return DataEnvelope(
         data=HighlightListResponse(
             items=[
                 HighlightItem(
                     id=to_api_id("highlight", hl.id),
                     document_id=to_api_id("document", hl.media_id),
+                    anchor_type=hl.anchor_type,
                     text_start=hl.text_start,
                     text_end=hl.text_end,
                     quote=hl.quote,
+                    color=hl.color,
+                    pdf_page_number=hl.pdf_page_number,
+                    pdf_char_offset=hl.pdf_char_offset,
                     created_at=hl.created_at,
                     updated_at=hl.updated_at,
                 )

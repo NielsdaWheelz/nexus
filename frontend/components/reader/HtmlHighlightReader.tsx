@@ -200,6 +200,7 @@ export function HtmlHighlightReader({
   const { createHighlight, isPending: isCreating } = useCreateHighlight(documentId ?? "");
 
   // Memoize segment computation (expensive for large texts)
+  // Only process text-anchor highlights for HTML/EPUB (not PDF or transcript anchors)
   const segments = useMemo(() => {
     if (!canonicalText || highlights.length === 0) {
       // No highlights: return single text segment
@@ -208,7 +209,14 @@ export function HtmlHighlightReader({
         : [];
     }
 
-    const validated = validateAndClampHighlights(highlights, canonicalText.length);
+    // Filter for text anchors only (html/epub highlights use anchor_type="text")
+    const textHighlights = highlights.filter((h) => h.anchor_type === "text");
+    
+    if (textHighlights.length === 0) {
+      return [{ kind: "text" as const, text: canonicalText }];
+    }
+
+    const validated = validateAndClampHighlights(textHighlights, canonicalText.length);
     const sorted = sortHighlights(validated);
     return buildSegments(canonicalText, sorted);
   }, [canonicalText, highlights]);
