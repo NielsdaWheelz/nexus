@@ -11,3 +11,75 @@ body {
     -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell",
     "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
 }
+
+/* PDF Highlight Styling */
+.pdf-highlight {
+  background-color: rgba(255, 235, 59, 0.4);
+  border-radius: 2px;
+  transition: background-color 0.15s ease;
+}
+
+.pdf-highlight:hover {
+  background-color: rgba(255, 235, 59, 0.6);
+}
+
+.pdf-highlight-active {
+  background-color: rgba(255, 193, 7, 0.6);
+  box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.8);
+}
+
+/* Color variants */
+.pdf-highlight-yellow {
+  background-color: rgba(255, 235, 59, 0.4);
+}
+.pdf-highlight-yellow:hover {
+  background-color: rgba(255, 235, 59, 0.6);
+}
+.pdf-highlight-yellow.pdf-highlight-active {
+  background-color: rgba(255, 193, 7, 0.6);
+  box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.8);
+}
+
+.pdf-highlight-blue {
+  background-color: rgba(33, 150, 243, 0.3);
+}
+.pdf-highlight-blue:hover {
+  background-color: rgba(33, 150, 243, 0.5);
+}
+.pdf-highlight-blue.pdf-highlight-active {
+  background-color: rgba(25, 118, 210, 0.5);
+  box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.8);
+}
+
+.pdf-highlight-green {
+  background-color: rgba(76, 175, 80, 0.3);
+}
+.pdf-highlight-green:hover {
+  background-color: rgba(76, 175, 80, 0.5);
+}
+.pdf-highlight-green.pdf-highlight-active {
+  background-color: rgba(56, 142, 60, 0.5);
+  box-shadow: 0 0 0 2px rgba(56, 142, 60, 0.8);
+}
+
+.pdf-highlight-pink {
+  background-color: rgba(233, 30, 99, 0.3);
+}
+.pdf-highlight-pink:hover {
+  background-color: rgba(233, 30, 99, 0.5);
+}
+.pdf-highlight-pink.pdf-highlight-active {
+  background-color: rgba(194, 24, 91, 0.5);
+  box-shadow: 0 0 0 2px rgba(194, 24, 91, 0.8);
+}
+
+.pdf-highlight-purple {
+  background-color: rgba(156, 39, 176, 0.3);
+}
+.pdf-highlight-purple:hover {
+  background-color: rgba(156, 39, 176, 0.5);
+}
+.pdf-highlight-purple.pdf-highlight-active {
+  background-color: rgba(123, 31, 162, 0.5);
+  box-shadow: 0 0 0 2px rgba(123, 31, 162, 0.8);
+}

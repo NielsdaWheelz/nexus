@@ -96,6 +96,32 @@ export class DocumentsService {
         });
     }
     /**
+     * Get document blob
+     * Retrieve the original binary file (PDF, EPUB, HTML) for rendering.
+     * @param documentId
+     * @param authorization
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static getDocumentBlobDocumentsDocumentIdBlobGet(
+        documentId: string,
+        authorization?: (string | null),
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/documents/{document_id}/blob',
+            path: {
+                'document_id': documentId,
+            },
+            headers: {
+                'authorization': authorization,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
      * Get document content
      * Retrieve the canonical text content of a document for rendering.
      * @param documentId

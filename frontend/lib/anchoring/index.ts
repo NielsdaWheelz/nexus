@@ -15,6 +15,8 @@
  * - When canonical text changes: use remapAnchorAfterCanonicalChange to
  *   update highlight positions.
  *
+ * - For PDF rendering: use applyPdfHighlightsToPage to decorate the text layer.
+ *
  * All functions are pure, deterministic, and never throw.
  */
 
@@ -35,4 +37,14 @@ export {
   resolveSelectionToCanonicalOffsets,
   buildAnchorTriple,
 } from "./core";
+
+// Re-export PDF anchoring types and functions
+export type { PdfHighlightAnchor, ApplyHighlightsResult } from "./pdfAnchoring";
+export {
+  applyPdfHighlightsToPage,
+  clearPdfHighlightsFromPage,
+  updateActiveHighlight,
+  findHighlightElement,
+  highlightIntersectsPage,
+} from "./pdfAnchoring";
 

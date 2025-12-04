@@ -15,14 +15,19 @@ function createMockHighlight(
   textStart: number,
   textEnd: number,
   quote: string,
-  createdAt: string = "2025-01-01T12:00:00Z"
+  createdAt: string = "2025-01-01T12:00:00Z",
+  options?: { anchor_type?: "text" | "pdf" | "transcript"; color?: string }
 ): HighlightItem {
   return {
     id,
     document_id: "doc_test",
+    anchor_type: options?.anchor_type ?? "text",
     text_start: textStart,
     text_end: textEnd,
     quote,
+    color: options?.color ?? "yellow",
+    pdf_page_number: null,
+    pdf_char_offset: null,
     created_at: createdAt,
     updated_at: createdAt,
   };

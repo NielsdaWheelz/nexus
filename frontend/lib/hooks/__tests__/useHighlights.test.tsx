@@ -21,8 +21,13 @@ const mockFetchDocumentHighlights = vi.mocked(fetchDocumentHighlights);
 const mockHighlight1: HighlightItem = {
   id: "hl_11111111-2222-3333-4444-555555555555",
   document_id: "doc_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-  byte_start: 100,
-  byte_end: 150,
+  anchor_type: "text",
+  text_start: 100,
+  text_end: 150,
+  quote: "test quote 1",
+  color: "yellow",
+  pdf_page_number: null,
+  pdf_char_offset: null,
   created_at: "2025-01-01T12:00:00Z",
   updated_at: "2025-01-01T12:00:00Z",
 };
@@ -30,8 +35,13 @@ const mockHighlight1: HighlightItem = {
 const mockHighlight2: HighlightItem = {
   id: "hl_22222222-3333-4444-5555-666666666666",
   document_id: "doc_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-  byte_start: 200,
-  byte_end: 250,
+  anchor_type: "text",
+  text_start: 200,
+  text_end: 250,
+  quote: "test quote 2",
+  color: "blue",
+  pdf_page_number: null,
+  pdf_char_offset: null,
   created_at: "2025-01-02T10:30:00Z",
   updated_at: "2025-01-02T10:32:00Z",
 };
@@ -88,7 +98,7 @@ describe("useDocumentHighlights", () => {
     expect(result.current.highlights[0].id).toBe(
       "hl_11111111-2222-3333-4444-555555555555"
     );
-    expect(result.current.highlights[1].byte_start).toBe(200);
+    expect(result.current.highlights[1].text_start).toBe(200);
   });
 
   test("exposes error on fetch failure", async () => {
