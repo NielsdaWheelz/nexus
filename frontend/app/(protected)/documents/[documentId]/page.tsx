@@ -9,6 +9,8 @@ import { DocumentListItem } from "@/lib/generated-api";
 import { ReaderLayout } from "@/components/reader/ReaderLayout";
 import { HtmlHighlightReader } from "@/components/reader/HtmlHighlightReader";
 import { HighlightsInspectorTab } from "@/components/reader/HighlightsInspectorTab";
+import { AnnotationsInspectorTab } from "@/components/reader/AnnotationsInspectorTab";
+import { useUIStore } from "@/lib/state/ui";
 
 /**
  * Document detail page.
@@ -86,6 +88,9 @@ function DocumentReader({
 }) {
   const isReady = document.processing_status === "ready";
 
+  // Get active highlight from UI store for annotations tab
+  const activeHighlightId = useUIStore((s) => s.activeHighlightId);
+
   // Fetch highlights for this document
   const {
     highlights,
@@ -120,6 +125,11 @@ function DocumentReader({
       isLoading={highlightsLoading}
       error={highlightsError ? highlightsErrorObj?.message : null}
     />
+  );
+
+  // Build inspector content for annotations tab
+  const annotationsContent = (
+    <AnnotationsInspectorTab highlightId={activeHighlightId} />
   );
 
   // Determine reader content based on document type and status
@@ -194,6 +204,7 @@ function DocumentReader({
     <ReaderLayout
       documentId={documentId}
       highlightsContent={highlightsContent}
+      annotationsContent={annotationsContent}
     >
       {readerContent}
     </ReaderLayout>
