@@ -29,11 +29,14 @@ vi.mock("next/link", () => {
 import { fetchDocument } from "@/lib/api/documents";
 const mockFetchDocument = vi.mocked(fetchDocument);
 
+// Note: Using "pending" status for these tests since "ready" documents
+// render readers (PdfReader or HtmlHighlightReader) instead of DocumentContent.
+// These tests verify the document metadata display in DocumentContent.
 const mockDocument: DocumentListItem = {
   id: "doc_11111111-2222-3333-4444-555555555555",
   title: "The Myth of Sisyphus",
-  source_kind: DocumentListItem.source_kind.PDF,
-  processing_status: DocumentListItem.processing_status.READY,
+  source_kind: DocumentListItem.source_kind.HTML,
+  processing_status: DocumentListItem.processing_status.PENDING,
   created_at: "2025-01-01T12:00:00Z",
   updated_at: "2025-01-01T13:00:00Z",
 };
@@ -81,8 +84,8 @@ describe("DocumentDetailPage", () => {
 
     await waitFor(() => {
       expect(screen.getByText("The Myth of Sisyphus")).toBeInTheDocument();
-      expect(screen.getByText("PDF")).toBeInTheDocument();
-      expect(screen.getByText("Ready")).toBeInTheDocument();
+      expect(screen.getByText("HTML")).toBeInTheDocument();
+      expect(screen.getByText("Pending")).toBeInTheDocument();
     });
   });
 

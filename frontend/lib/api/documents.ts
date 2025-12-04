@@ -138,6 +138,111 @@ export async function uploadDocument(
   );
 }
 
+/**
+ * Fetch the original binary blob of a document.
+ *
+ * This returns the raw file (PDF, EPUB, HTML) as an ArrayBuffer.
+ * Used by PDF.js and other renderers that need the original binary content.
+ *
+ * NOTE: This intentionally bypasses the normal callApi/DataEnvelope pattern
+ * because the blob endpoint returns raw binary data, not a JSON-wrapped response.
+ * However, it still:
+ * - Uses OpenAPI.BASE for the base URL (same as generated client)
+ * - Uses OpenAPI.TOKEN for auth (same token resolution as generated client)
+ * - Uses OpenAPI.CREDENTIALS for cookie handling
+ * - Normalizes errors to ClientError shape (same as callApi)
+ *
+ * @param documentId - Typed document ID (doc_<uuid>)
+ * @returns ArrayBuffer containing the binary file content
+ * @throws {ClientError} On API failure (404, 401, etc.)
+ *
+ * @example
+ * ```ts
+ * const buffer = await fetchDocumentBlob("doc_abc123...");
+ * // Use with PDF.js: pdfjsLib.getDocument({ data: buffer })
+ * ```
+ */
+export async function fetchDocumentBlob(documentId: string): Promise<ArrayBuffer> {
+  const { OpenAPI } = await import("@/lib/generated-api");
+
+  // Build URL using the same base as the generated client
+  const baseUrl = OpenAPI.BASE || "";
+  const url = `${baseUrl}/documents/${documentId}/blob`;
+
+  // Resolve auth token using the same machinery as the generated client
+  // OpenAPI.TOKEN can be a string, a resolver function, or undefined
+  let token: string | undefined;
+  if (typeof OpenAPI.TOKEN === "function") {
+    token = await OpenAPI.TOKEN({} as Parameters<typeof OpenAPI.TOKEN>[0]);
+  } else if (typeof OpenAPI.TOKEN === "string") {
+    token = OpenAPI.TOKEN;
+  }
+
+  // Build headers, including auth token if available
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers,
+    credentials: OpenAPI.CREDENTIALS,
+  });
+
+  if (!response.ok) {
+    // Try to parse error envelope from response (backend returns JSON error body)
+    let errorData: {
+      error?: {
+        code?: string;
+        message?: string;
+        details?: unknown;
+        trace_id?: string | null;
+      };
+    } | null = null;
+    try {
+      errorData = await response.json();
+    } catch {
+      // Response is not JSON (e.g., nginx error page), use status text
+    }
+
+    // Normalize to ClientError shape for consistent error handling
+    const error: ClientError = {
+      httpStatus: response.status,
+      code: errorData?.error?.code ?? mapHttpStatusToCode(response.status),
+      message:
+        errorData?.error?.message ??
+        response.statusText ??
+        "Failed to fetch document blob",
+      details: errorData?.error?.details ?? null,
+      traceId: errorData?.error?.trace_id ?? null,
+    };
+
+    throw error;
+  }
+
+  return response.arrayBuffer();
+}
+
+/**
+ * Map HTTP status codes to canonical error codes.
+ * Used as fallback when error envelope is missing from response.
+ */
+function mapHttpStatusToCode(status: number): string {
+  const statusCodeMap: Record<number, string> = {
+    400: "BAD_REQUEST",
+    401: "AUTH_REQUIRED",
+    403: "PERMISSION_DENIED",
+    404: "NOT_FOUND",
+    409: "CONFLICT",
+    422: "VALIDATION_ERROR",
+    429: "RATE_LIMITED",
+    500: "INTERNAL_ERROR",
+    503: "UNAVAILABLE",
+  };
+  return statusCodeMap[status] || "UNKNOWN_ERROR";
+}
+
 // Re-export error utilities for convenience
 export { isNotFoundError, isAuthError, isClientError, type ClientError } from "./http";
 
