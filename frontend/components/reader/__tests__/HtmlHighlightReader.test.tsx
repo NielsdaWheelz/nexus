@@ -715,10 +715,11 @@ describe("HtmlHighlightReader - highlight creation flow", () => {
       fireEvent.click(screen.getByTestId("create-highlight-btn"));
     });
 
-    // Verify API was called with correct offsets
+    // Verify API was called with correct offsets and anchor type
     await waitFor(() => {
       expect(mockCreateHighlight).toHaveBeenCalledWith({
         documentId,
+        anchorType: "text",
         textStart: 7, // "world" starts at index 7
         textEnd: 12, // "world" ends at index 12
       });

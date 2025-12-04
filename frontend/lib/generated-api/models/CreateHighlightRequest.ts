@@ -6,22 +6,31 @@
  * Request body for POST /highlights.
  *
  * Generic highlight creation endpoint supporting multiple media types and anchor types.
- * For v1, only media_type="document" with anchor_type="text" is supported.
+ * For v1, media_type="document" with anchor_type="text" (HTML/EPUB) or "pdf" (PDF) is supported.
  *
- * Accepts a character-range anchor (text_start, text_end) which will be
- * validated and mapped to the richer internal anchor format by the route handler.
+ * Anchor Types:
+ * - "text": Character offsets into canonical_text (for HTML/EPUB documents)
+ * - "pdf": PDF.js text layer offsets + page number (for PDF documents)
  *
- * Offset Semantics (v1):
+ * Text Anchor Offset Semantics:
  * text_start and text_end are zero-indexed positions into canonical_text
- * treated as a sequence of Unicode code points. For practical purposes,
- * treat them as Python/JS string indices.
+ * treated as a sequence of Unicode code points.
+ *
+ * PDF Anchor Offset Semantics:
+ * text_start and text_end are GLOBAL character offsets in the pdf.js text stream.
+ * pdf_page_number and pdf_char_offset provide per-page coordinates.
  *
  * Attributes:
  * media_type: Type of media to highlight ("document" only for v1)
  * media_id: Typed media ID (e.g., doc_<uuid> for documents)
- * anchor_type: Type of anchor ("text" only for html/epub in v1)
- * text_start: Character offset start in canonical_text (>= 0)
- * text_end: Character offset end in canonical_text (> text_start)
+ * anchor_type: Type of anchor ("text" for html/epub, "pdf" for pdf)
+ * text_start: Character offset start (>= 0)
+ * text_end: Character offset end (> text_start)
+ * pdf_page_number: PDF page number (1-based, required for anchor_type="pdf")
+ * pdf_char_offset: Character offset within page (required for anchor_type="pdf")
+ * quote: Selected text (required for anchor_type="pdf", computed for "text")
+ * prefix: Context before quote (optional for anchor_type="pdf")
+ * suffix: Context after quote (optional for anchor_type="pdf")
  */
 export type CreateHighlightRequest = {
     /**
@@ -33,9 +42,9 @@ export type CreateHighlightRequest = {
      */
     media_id: string;
     /**
-     * Type of anchor (only 'text' supported for html/epub in v1)
+     * Type of anchor ('text' for html/epub, 'pdf' for pdf)
      */
-    anchor_type: string;
+    anchor_type: 'text' | 'pdf';
     /**
      * Character offset start (>= 0)
      */
@@ -44,5 +53,25 @@ export type CreateHighlightRequest = {
      * Character offset end (> text_start)
      */
     text_end: number;
+    /**
+     * PDF page number (1-based, required for anchor_type='pdf')
+     */
+    pdf_page_number?: number | null;
+    /**
+     * Character offset within page (required for anchor_type='pdf')
+     */
+    pdf_char_offset?: number | null;
+    /**
+     * Selected text (required for anchor_type='pdf', computed server-side for 'text')
+     */
+    quote?: string | null;
+    /**
+     * Context before quote (optional for anchor_type='pdf')
+     */
+    prefix?: string | null;
+    /**
+     * Context after quote (optional for anchor_type='pdf')
+     */
+    suffix?: string | null;
 };
 

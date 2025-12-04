@@ -78,60 +78,121 @@ export async function fetchDocumentHighlights(
 }
 
 /**
- * Parameters for creating a highlight.
+ * Base parameters for creating any highlight.
  */
-export interface CreateHighlightParams {
+interface CreateHighlightParamsBase {
   /** Typed document ID (doc_<uuid>) */
   documentId: string;
-  /** Character offset start in canonical_text (>= 0) */
+  /** Character offset start (>= 0) */
   textStart: number;
-  /** Character offset end in canonical_text (> textStart) */
+  /** Character offset end (> textStart) */
   textEnd: number;
 }
 
 /**
+ * Parameters for creating a text highlight (HTML/EPUB).
+ * Backend computes quote/prefix/suffix from canonical_text.
+ */
+export interface CreateTextHighlightParams extends CreateHighlightParamsBase {
+  anchorType: "text";
+}
+
+/**
+ * Parameters for creating a PDF highlight.
+ * Frontend provides quote/prefix/suffix from pdf.js text layer.
+ */
+export interface CreatePdfHighlightParams extends CreateHighlightParamsBase {
+  anchorType: "pdf";
+  /** PDF page number (1-based) */
+  pdfPageNumber: number;
+  /** Character offset within the page */
+  pdfCharOffset: number;
+  /** Selected text from pdf.js text layer */
+  quote: string;
+  /** Context before quote (up to 64 chars) */
+  prefix?: string;
+  /** Context after quote (up to 64 chars) */
+  suffix?: string;
+}
+
+/**
+ * Union type for creating highlights.
+ */
+export type CreateHighlightParams = CreateTextHighlightParams | CreatePdfHighlightParams;
+
+/**
  * Create a new highlight on a document.
  *
- * DESIGN DECISION (PR6):
- * The backend computes quote/prefix/suffix from canonical_text at the given offsets.
- * Client sends (media_type, media_id, anchor_type, text_start, text_end).
+ * DESIGN DECISIONS:
  *
- * Rationale:
+ * For TEXT anchors (HTML/EPUB - PR6):
+ * - Backend computes quote/prefix/suffix from canonical_text at given offsets
  * - Single source of truth: canonical text lives in DB
- * - No risk of client/server quote mismatch due to DOM vs canonical differences
- * - Generic API shape supports future media types (episodes, videos)
+ * - No risk of client/server quote mismatch
  *
- * Implication: remap jobs assume quote/prefix/suffix are derived from canonical text,
- * not from browser DOM.
+ * For PDF anchors (PR10):
+ * - Frontend provides quote/prefix/suffix from pdf.js text layer
+ * - Backend cannot access pdf.js extraction, so client must send the text
+ * - Offsets are in pdf.js text stream coordinates, not canonical_text
  *
- * v1 constraints:
- * - media_type: only "document" supported
- * - anchor_type: only "text" supported for html/epub
- *
- * @param params - Document ID and text offsets
+ * @param params - Document ID, offsets, and anchor-type-specific fields
  * @returns The created highlight item
  * @throws {ClientError} On API failure
  *
- * @example
+ * @example Text highlight (HTML/EPUB):
  * ```ts
  * const highlight = await createHighlight({
  *   documentId: "doc_abc123...",
+ *   anchorType: "text",
  *   textStart: 100,
  *   textEnd: 150,
  * });
- * console.log(highlight.id); // "hl_xyz..."
+ * ```
+ *
+ * @example PDF highlight:
+ * ```ts
+ * const highlight = await createHighlight({
+ *   documentId: "doc_abc123...",
+ *   anchorType: "pdf",
+ *   textStart: 500,
+ *   textEnd: 550,
+ *   pdfPageNumber: 3,
+ *   pdfCharOffset: 100,
+ *   quote: "selected text",
+ *   prefix: "text before ",
+ *   suffix: " text after",
+ * });
  * ```
  */
 export async function createHighlight(
   params: CreateHighlightParams
 ): Promise<HighlightItem> {
-  const request: CreateHighlightRequest = {
-    media_type: "document",
-    media_id: params.documentId,
-    anchor_type: "text",
-    text_start: params.textStart,
-    text_end: params.textEnd,
-  };
+  let request: CreateHighlightRequest;
+
+  if (params.anchorType === "text") {
+    // Text anchor: backend computes quote/prefix/suffix
+    request = {
+      media_type: "document",
+      media_id: params.documentId,
+      anchor_type: "text",
+      text_start: params.textStart,
+      text_end: params.textEnd,
+    };
+  } else {
+    // PDF anchor: frontend provides quote/prefix/suffix from pdf.js
+    request = {
+      media_type: "document",
+      media_id: params.documentId,
+      anchor_type: "pdf",
+      text_start: params.textStart,
+      text_end: params.textEnd,
+      pdf_page_number: params.pdfPageNumber,
+      pdf_char_offset: params.pdfCharOffset,
+      quote: params.quote,
+      prefix: params.prefix ?? null,
+      suffix: params.suffix ?? null,
+    };
+  }
 
   const response = await callApi<HighlightItem>(() =>
     HighlightsService.createHighlightEndpointHighlightsPost(request)
