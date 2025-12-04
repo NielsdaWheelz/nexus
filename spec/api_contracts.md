@@ -722,6 +722,81 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 }
 ```
 
+#### 5.1.4 Get Document Blob
+
+**GET /v1/documents/{document_id}/blob**
+
+Retrieve the original binary file (PDF, EPUB, HTML) for client-side rendering.
+
+**IMPORTANT**: This endpoint returns **raw binary data**, NOT a JSON `DataEnvelope`. It is the only document endpoint that bypasses the standard response envelope.
+
+**Request**:
+
+```http
+GET /v1/documents/doc_11111111-2222-3333-4444-555555555555/blob HTTP/1.1
+Host: api.nexus.local
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+**Success Response (200 OK)**:
+
+```
+Content-Type: application/pdf (or application/epub+zip, text/html)
+Content-Disposition: inline; filename="The Myth of Sisyphus"
+Content-Length: 1234567
+
+[binary file content]
+```
+
+**Response Headers**:
+
+| Header | Value | Notes |
+|--------|-------|-------|
+| `Content-Type` | `application/pdf`, `application/epub+zip`, `text/html` | Matches `original_mime_type` from document |
+| `Content-Disposition` | `inline; filename="..."` | Uses document title |
+| `Content-Length` | Integer | File size in bytes |
+
+**Error Response – Not Found (404)**:
+
+Returns standard JSON error envelope (NOT binary) when document not found or user lacks access:
+
+```json
+{
+  "error": {
+    "code": "ERR_RESOURCE_NOT_FOUND",
+    "message": "Document not found",
+    "details": {
+      "resource_type": "document",
+      "resource_id": "doc_11111111-2222-3333-4444-555555555555"
+    },
+    "trace_id": "550e8400-e29b-41d4-a716-446655440004"
+  }
+}
+```
+
+**Error Response – Storage Unavailable (503)**:
+
+```json
+{
+  "error": {
+    "code": "ERR_UNAVAILABLE",
+    "message": "Storage service unavailable",
+    "details": {
+      "error_type": "IOError"
+    },
+    "trace_id": "550e8400-e29b-41d4-a716-446655440005"
+  }
+}
+```
+
+**Use Cases**:
+
+- PDF.js client-side rendering (primary use case)
+- EPUB reader rendering
+- HTML document display
+
+**ACL**: Same ownership/visibility rules as GET /documents/{document_id}. User must own the document.
+
 ### 5.2 Highlight & Annotation Endpoints
 
 #### 5.2.1 Create Highlight

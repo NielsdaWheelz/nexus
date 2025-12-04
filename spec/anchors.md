@@ -62,12 +62,49 @@ Used for: PDF documents where highlights are rendered via pdf.js in browser/WebV
 
 **CRITICAL DISTINCTION**: PDF anchors use **pdf.js character offsets from text layer extraction**, NOT canonical text byte positions. Canonical text for PDFs is used **ONLY for retrieval indexing**, never for anchor positioning. This ensures highlights remain stable even when canonical text extraction code changes.
 
-**`text_start`, `text_end`**:
+#### 1.3.1 Offset Semantics
 
-- pdf.js character offsets in extracted text layer (NOT canonical_text byte offsets)
-- Zero-indexed positions in pdf.js TextLayer
+PDF anchors use **two complementary offset systems**:
+
+| Field | Scope | Purpose |
+|-------|-------|---------|
+| `text_start`, `text_end` | Global (entire document) | Exact position in full pdf.js text stream |
+| `pdf_page_number` + `pdf_char_offset` | Per-page | Efficient page lookup and rendering |
+
+**`text_start`, `text_end`** (global offsets):
+
+- 0-indexed character positions in the concatenation of all pdf.js text items across all pages
+- Computed by iterating pages 1..N in order, then text items in order within each page
 - `[start, end)` interval (inclusive start, exclusive end)
+- No separator characters are inserted between text items or pages
 - These offsets are independent of `canonical_text` extraction
+
+**`pdf_page_number`** + **`pdf_char_offset`** (per-page offsets):
+
+- `pdf_page_number`: 1-indexed page number where highlight starts
+- `pdf_char_offset`: 0-indexed character offset within that page's text stream
+- Relationship: `text_start = sum(text lengths of pages 1..pdf_page_number-1) + pdf_char_offset`
+- Used for efficient page-level rendering (jump to page, binary search within page)
+
+**Frontend DOM Implementation**:
+
+The `PdfReader` component renders text layer spans with:
+- `data-page-number`: 1-indexed page number
+- `data-char-offset`: **global** offset (i.e., `text_start` for that span)
+
+When creating highlights, the frontend anchoring code MUST:
+1. Capture `text_start`/`text_end` from the selected spans' `data-char-offset` values
+2. Compute `pdf_page_number` from `data-page-number` of the first selected span
+3. Compute `pdf_char_offset` by subtracting the cumulative text length of all previous pages
+
+**Lazy Loading Implications**:
+
+The PDF viewer loads pages progressively (initial 3-5 pages, then more on scroll). This creates a constraint:
+
+- Global offsets are computed as pages are rendered
+- If a user selects text on page N, all pages 1..(N-1) MUST have been processed to compute correct global offsets
+- Current implementation: re-processes all pages 1..N when rendering page N (correct but potentially slow)
+- Future optimization: cache per-page text lengths to avoid re-extraction
 
 **`quote`**:
 
@@ -78,17 +115,8 @@ Used for: PDF documents where highlights are rendered via pdf.js in browser/WebV
 **`prefix`, `suffix`**:
 
 - Context extracted from pdf.js text layer (64 bytes each)
+- Uses global text stream (may span page boundaries)
 - Used for disambiguation during remap
-
-**`pdf_page_number`** (REQUIRED):
-
-- 1-indexed page number where highlight appears
-- Used for efficient lookup during rendering
-
-**`pdf_char_offset`** (REQUIRED):
-
-- Character offset within the page (0-indexed)
-- Enables binary search within page text layer
 
 **`pdf_file_hash`** (REQUIRED):
 

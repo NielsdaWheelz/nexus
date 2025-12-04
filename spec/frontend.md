@@ -18,11 +18,35 @@
 
 #### PDFs
 
-- **Library**: pdf.js (Mozilla)
+- **Library**: pdf.js (Mozilla), version 5.x
 - **Approach**: Client-side rendering via `<canvas>`
-- **Text layer**: Extracted via pdf.js, used for highlight positioning
+- **Text layer**: Extracted via pdf.js `getTextContent()`, used for highlight positioning
 - **Selection**: Text selection in pdf.js viewer creates anchors via text layer offsets
-- **Highlight rendering**: Canvas overlays for colored highlights
+- **Highlight rendering**: Canvas overlays for colored highlights (Phase 2+; read-only in Phase 1)
+
+**Blob Fetching**:
+
+The PDF viewer fetches the original PDF binary via `GET /documents/{document_id}/blob` (see §5.1.4 in api_contracts.md). This endpoint returns raw binary data, not a JSON envelope.
+
+**Worker Configuration (Current)**:
+
+pdf.js requires a Web Worker for parsing. Current approach uses CDN-hosted worker:
+
+```typescript
+const pdfjsVersion = pdfjsLib.version;
+pdfjsLib.GlobalWorkerOptions.workerSrc = 
+  `https://unpkg.com/pdfjs-dist@${pdfjsVersion}/build/pdf.worker.min.mjs`;
+```
+
+**Tradeoffs**:
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| CDN worker (current) | Simple, no bundler config | Dependency on unpkg, CSP issues, offline fails |
+| Self-hosted worker | Full control, offline works, no CSP issues | Requires copying worker to `/public`, build config |
+| Inline worker (disabled) | No separate file | Large bundle, slower initial parse |
+
+**TODO (hardening)**: Replace CDN worker with self-hosted worker in `/public/pdf.worker.min.mjs` before production deployment. This eliminates third-party dependency and enables offline support.
 
 #### EPUB/HTML
 

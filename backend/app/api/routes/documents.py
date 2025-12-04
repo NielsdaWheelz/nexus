@@ -15,9 +15,11 @@ import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.auth.deps import rate_limit_authenticated
+from app.core.deferred_tasks import defer_task
 from app.core.errors import AppError, ErrorCode, ValidationAppError
 from app.core.ids import from_api_id, to_api_id
 from app.core.pagination import PaginationParams
@@ -31,7 +33,6 @@ from app.schemas.documents import (
     DocumentUploadResponse,
 )
 from app.schemas.readers import ReaderListResponse, ReaderResponse
-from app.core.deferred_tasks import defer_task
 from app.services.documents import create_document_placeholder, list_documents_for_user
 from app.services.readers import list_readers_for_document as list_readers_service
 from app.services.storage import StorageService
@@ -340,6 +341,108 @@ async def get_document(
             created_at=doc.created_at,
             updated_at=doc.updated_at,
         )
+    )
+
+
+@router.get(
+    "/{document_id}/blob",
+    status_code=200,
+    summary="Get document blob",
+    description="Retrieve the original binary file (PDF, EPUB, HTML) for rendering.",
+)
+async def get_document_blob(
+    document_id: str,
+    current_user: Annotated[User, Depends(rate_limit_authenticated)],
+    session: Annotated[Session, Depends(_get_session)],
+) -> StreamingResponse:
+    """Get the original binary blob of a document.
+
+    Returns the original uploaded file for rendering (e.g., PDF for pdf.js).
+    Document must be owned by the authenticated user.
+
+    Path Parameters:
+    - document_id: Typed document ID (doc_<uuid>)
+
+    Returns binary file with appropriate content-type.
+    Returns 404 if document doesn't exist or user doesn't own it.
+
+    Args:
+        document_id: Typed document ID
+        current_user: Authenticated user (must own the document)
+        session: Database session
+
+    Returns:
+        StreamingResponse with the binary file content
+
+    Raises:
+        ValidationAppError (422): If document_id format invalid
+        NotFoundError (404): If document not found or user doesn't own it
+        AppError (503): If blob cannot be read from storage
+
+    Example:
+        >>> GET /documents/doc_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/blob
+        >>> # Returns binary content with Content-Type: application/pdf
+    """
+    # Parse and validate document_id
+    try:
+        doc_type, doc_uuid = from_api_id(document_id)
+    except ValueError as e:
+        raise ValidationAppError(
+            message=f"Invalid document_id format: {str(e)}",
+            details={"field": "document_id", "value": document_id},
+        ) from e
+
+    # Verify document type
+    if doc_type != "document":
+        raise ValidationAppError(
+            message=f"Expected document ID, got {doc_type}",
+            details={"field": "document_id", "expected_type": "document", "got_type": doc_type},
+        )
+
+    # Retrieve document with ownership check
+    from app.services.documents import get_document_for_user
+
+    doc = get_document_for_user(
+        session=session,
+        user=current_user,
+        document_id=doc_uuid,
+    )
+
+    # Open the blob from storage
+    storage = StorageService()
+    try:
+        blob_file = storage.open_blob(doc.original_blob_key)
+    except FileNotFoundError as e:
+        raise AppError(
+            code=ErrorCode.NOT_FOUND,
+            http_status=404,
+            message="Document blob not found in storage",
+            details={"document_id": document_id},
+        ) from e
+    except (OSError, IOError) as e:
+        logger.error(f"Storage read failure: {e}")
+        raise AppError(
+            code=ErrorCode.UNAVAILABLE,
+            http_status=503,
+            message="Storage service unavailable",
+            details={"error_type": type(e).__name__},
+        ) from e
+
+    # Stream the file content
+    def iter_file():
+        try:
+            while chunk := blob_file.read(64 * 1024):  # 64KB chunks
+                yield chunk
+        finally:
+            blob_file.close()
+
+    return StreamingResponse(
+        iter_file(),
+        media_type=doc.original_mime_type,
+        headers={
+            "Content-Disposition": f"inline; filename=\"{doc.title or 'document'}\"",
+            "Content-Length": str(doc.original_size_bytes),
+        },
     )
 
 

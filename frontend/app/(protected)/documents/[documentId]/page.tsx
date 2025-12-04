@@ -8,6 +8,7 @@ import { isClientError, isNotFoundError, type ClientError } from "@/lib/api/http
 import { DocumentListItem } from "@/lib/generated-api";
 import { ReaderLayout } from "@/components/reader/ReaderLayout";
 import { HtmlHighlightReader } from "@/components/reader/HtmlHighlightReader";
+import { PdfReader } from "@/components/reader/PdfReader";
 import { HighlightsInspectorTab } from "@/components/reader/HighlightsInspectorTab";
 import { AnnotationsInspectorTab } from "@/components/reader/AnnotationsInspectorTab";
 import { useUIStore } from "@/lib/state/ui";
@@ -111,7 +112,8 @@ function DocumentReader({
     enabled: isReady,
   });
 
-  // Check if this is an HTML/EPUB document (renderable in v1)
+  // Check document type
+  const isPdfDocument = document.source_kind === DocumentListItem.source_kind.PDF;
   const isTextDocument =
     document.source_kind === DocumentListItem.source_kind.HTML ||
     document.source_kind === DocumentListItem.source_kind.EPUB;
@@ -138,15 +140,20 @@ function DocumentReader({
   if (document.processing_status !== "ready") {
     // Document not ready yet
     readerContent = <DocumentContent document={document} />;
+  } else if (isPdfDocument) {
+    // PDF document - use PdfReader (read-only for now)
+    readerContent = (
+      <PdfReader documentId={documentId} document={document} />
+    );
   } else if (!isTextDocument) {
-    // PDF or other non-text document
+    // Unknown document type
     readerContent = (
       <div className="bg-gray-50 rounded-lg border border-gray-200 p-8 text-center">
         <h2 className="text-lg font-semibold text-gray-700 mb-2">
-          PDF Reader Coming Soon
+          Unsupported Document Type
         </h2>
         <p className="text-gray-500">
-          PDF rendering is not implemented in this build.
+          This document type is not yet supported.
         </p>
         <DocumentContent document={document} />
       </div>
