@@ -5,6 +5,7 @@ import { useUIStore } from "@/lib/state/ui";
 import { useCreateHighlight } from "@/lib/hooks/useHighlights";
 import { useSelectionDismiss } from "@/lib/hooks/useSelectionDismiss";
 import { resolveSelectionToCanonicalOffsets } from "@/lib/anchoring/core";
+import { sortHighlights } from "@/lib/highlights/sort";
 import type { HighlightItem } from "@/lib/api/highlights";
 
 /**
@@ -58,22 +59,6 @@ function validateAndClampHighlights(
       text_end: Math.max(0, Math.min(h.text_end, textLength)),
     }))
     .filter((h) => h.text_start < h.text_end);
-}
-
-/**
- * Sort highlights for deterministic rendering.
- *
- * Order: text_start ASC, text_end ASC, id ASC
- *
- * @param highlights - Highlights to sort
- * @returns Sorted copy of highlights
- */
-function sortHighlights(highlights: HighlightItem[]): HighlightItem[] {
-  return [...highlights].sort((a, b) => {
-    if (a.text_start !== b.text_start) return a.text_start - b.text_start;
-    if (a.text_end !== b.text_end) return a.text_end - b.text_end;
-    return a.id.localeCompare(b.id);
-  });
 }
 
 /**
