@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback } from "react";
 import Link from "next/link";
 import { useDocumentDetail } from "@/lib/hooks/useDocuments";
 import { useDocumentHighlights } from "@/lib/hooks/useHighlights";
@@ -9,7 +10,7 @@ import { DocumentListItem } from "@/lib/generated-api";
 import { ReaderLayout } from "@/components/reader/ReaderLayout";
 import { HtmlHighlightReader } from "@/components/reader/HtmlHighlightReader";
 import { PdfReader } from "@/components/reader/PdfReader";
-import { HighlightsInspectorTab } from "@/components/reader/HighlightsInspectorTab";
+import { InspectorPanel } from "@/components/inspector/InspectorPanel";
 import { AnnotationsInspectorTab } from "@/components/reader/AnnotationsInspectorTab";
 import { useUIStore } from "@/lib/state/ui";
 
@@ -79,6 +80,15 @@ export default function DocumentDetailPage({ params }: { params: { documentId: s
 
 /**
  * Document reader wrapper that handles highlights and content rendering.
+ *
+ * This component:
+ * 1. Fetches highlights and content for the document
+ * 2. Owns the activeHighlightId state (via UI store)
+ * 3. Wires the InspectorPanel click handler to set activeHighlightId
+ * 4. Passes activeHighlightId to the reader (which handles scrolling)
+ *
+ * The readers (HtmlHighlightReader, PdfReader) react to activeHighlightId
+ * changes from the store and scroll to the corresponding highlight.
  */
 function DocumentReader({
   document,
@@ -89,8 +99,13 @@ function DocumentReader({
 }) {
   const isReady = document.processing_status === "ready";
 
-  // Get active highlight from UI store for annotations tab
+  // UI store for active/hovered highlight state
+  // Readers (HtmlHighlightReader, PdfReader) subscribe to activeHighlightId
+  // and scroll to the highlight when it changes.
   const activeHighlightId = useUIStore((s) => s.activeHighlightId);
+  const hoveredHighlightId = useUIStore((s) => s.hoveredHighlightId);
+  const setActiveHighlightId = useUIStore((s) => s.setActiveHighlightId);
+  const setHoveredHighlightId = useUIStore((s) => s.setHoveredHighlightId);
 
   // Fetch highlights for this document
   const {
@@ -120,12 +135,34 @@ function DocumentReader({
 
   const canonicalText = contentData?.canonical_text ?? null;
 
-  // Build inspector content for highlights tab
+  // Handle highlight click from inspector
+  // Sets the activeHighlightId in the store, which triggers the reader to scroll
+  const handleHighlightClick = useCallback(
+    (highlightId: string) => {
+      setActiveHighlightId(highlightId);
+    },
+    [setActiveHighlightId]
+  );
+
+  // Handle highlight hover from inspector
+  const handleHighlightHover = useCallback(
+    (highlightId: string | null) => {
+      setHoveredHighlightId(highlightId);
+    },
+    [setHoveredHighlightId]
+  );
+
+  // Build inspector content for highlights tab using unified InspectorPanel
   const highlightsContent = (
-    <HighlightsInspectorTab
+    <InspectorPanel
+      documentId={documentId}
       highlights={highlights}
       isLoading={highlightsLoading}
       error={highlightsError ? highlightsErrorObj?.message : null}
+      activeHighlightId={activeHighlightId}
+      hoveredHighlightId={hoveredHighlightId}
+      onHighlightClick={handleHighlightClick}
+      onHighlightHover={handleHighlightHover}
     />
   );
 
