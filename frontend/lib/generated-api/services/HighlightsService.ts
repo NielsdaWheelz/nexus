@@ -11,7 +11,7 @@ import { request as __request } from '../core/request';
 export class HighlightsService {
     /**
      * Create highlight
-     * Create a new highlight with byte-range anchor on a document.
+     * Create a new highlight with character-range anchor on media.
      * @param requestBody
      * @param authorization
      * @returns DataEnvelope_HighlightItem_ Successful Response

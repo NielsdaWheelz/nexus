@@ -1,11 +1,44 @@
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import { describe, test, expect, beforeEach, vi } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import { HtmlHighlightReader } from "../HtmlHighlightReader";
 import { useUIStore } from "@/lib/state/ui";
 import type { HighlightItem } from "@/lib/generated-api";
 
 // Mock scrollIntoView since it's not available in JSDOM
 Element.prototype.scrollIntoView = vi.fn();
+
+// Mock the highlights API
+vi.mock("@/lib/api/highlights", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...(actual as object),
+    createHighlight: vi.fn(),
+    fetchDocumentHighlights: vi.fn(),
+  };
+});
+
+// Import mocked functions
+import { createHighlight } from "@/lib/api/highlights";
+const mockCreateHighlight = vi.mocked(createHighlight);
+
+/**
+ * Create a wrapper with QueryClient for hooks that need it.
+ */
+function createWrapper() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, gcTime: 0 },
+      mutations: { retry: false },
+    },
+  });
+  return function Wrapper({ children }: { children: ReactNode }) {
+    return (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+  };
+}
 
 /**
  * Create a mock highlight for testing.
@@ -42,6 +75,7 @@ function resetUIStore() {
 describe("HtmlHighlightReader", () => {
   beforeEach(() => {
     resetUIStore();
+    vi.clearAllMocks();
   });
 
   describe("basic rendering", () => {
@@ -50,7 +84,8 @@ describe("HtmlHighlightReader", () => {
         <HtmlHighlightReader
           canonicalText="Hello, world!"
           highlights={[]}
-        />
+        />,
+        { wrapper: createWrapper() }
       );
 
       expect(screen.getByTestId("html-reader")).toBeInTheDocument();
@@ -64,7 +99,8 @@ describe("HtmlHighlightReader", () => {
         <HtmlHighlightReader
           canonicalText=""
           highlights={[]}
-        />
+        />,
+        { wrapper: createWrapper() }
       );
 
       expect(screen.getByText("No content available")).toBeInTheDocument();
@@ -78,7 +114,8 @@ describe("HtmlHighlightReader", () => {
         <HtmlHighlightReader
           canonicalText={text}
           highlights={[highlight]}
-        />
+        />,
+        { wrapper: createWrapper() }
       );
 
       // Check that "world" is in a highlight span
@@ -98,7 +135,8 @@ describe("HtmlHighlightReader", () => {
         <HtmlHighlightReader
           canonicalText={text}
           highlights={highlights}
-        />
+        />,
+        { wrapper: createWrapper() }
       );
 
       // All three highlights should be rendered
@@ -124,7 +162,8 @@ describe("HtmlHighlightReader", () => {
         <HtmlHighlightReader
           canonicalText={text}
           highlights={[highlight]}
-        />
+        />,
+        { wrapper: createWrapper() }
       );
 
       expect(screen.getByText("Hello")).toHaveAttribute(
@@ -141,7 +180,8 @@ describe("HtmlHighlightReader", () => {
         <HtmlHighlightReader
           canonicalText={text}
           highlights={[highlight]}
-        />
+        />,
+        { wrapper: createWrapper() }
       );
 
       expect(screen.getByText("world!")).toHaveAttribute(
@@ -165,7 +205,8 @@ describe("HtmlHighlightReader", () => {
         <HtmlHighlightReader
           canonicalText={text}
           highlights={highlights}
-        />
+        />,
+        { wrapper: createWrapper() }
       );
 
       // hl_1 should be rendered (check by data-highlight-id)
@@ -189,7 +230,8 @@ describe("HtmlHighlightReader", () => {
         <HtmlHighlightReader
           canonicalText={text}
           highlights={highlights}
-        />
+        />,
+        { wrapper: createWrapper() }
       );
 
       // Both should be rendered (no overlap)
@@ -213,7 +255,8 @@ describe("HtmlHighlightReader", () => {
         <HtmlHighlightReader
           canonicalText={text}
           highlights={[highlight]}
-        />
+        />,
+        { wrapper: createWrapper() }
       );
 
       // Should clamp to 0-3 ("Hel")
@@ -231,7 +274,8 @@ describe("HtmlHighlightReader", () => {
         <HtmlHighlightReader
           canonicalText={text}
           highlights={[highlight]}
-        />
+        />,
+        { wrapper: createWrapper() }
       );
 
       // Should clamp to 3-5 ("lo")
@@ -252,7 +296,8 @@ describe("HtmlHighlightReader", () => {
         <HtmlHighlightReader
           canonicalText={text}
           highlights={highlights}
-        />
+        />,
+        { wrapper: createWrapper() }
       );
 
       // Neither should produce highlight spans
@@ -270,7 +315,8 @@ describe("HtmlHighlightReader", () => {
         <HtmlHighlightReader
           canonicalText={text}
           highlights={[highlight]}
-        />
+        />,
+        { wrapper: createWrapper() }
       );
 
       // Should render without crashing
@@ -285,7 +331,8 @@ describe("HtmlHighlightReader", () => {
         <HtmlHighlightReader
           canonicalText={text}
           highlights={[highlight]}
-        />
+        />,
+        { wrapper: createWrapper() }
       );
 
       expect(screen.getByText("world")).toHaveAttribute(
@@ -304,7 +351,8 @@ describe("HtmlHighlightReader", () => {
         <HtmlHighlightReader
           canonicalText={text}
           highlights={[highlight]}
-        />
+        />,
+        { wrapper: createWrapper() }
       );
 
       const highlightSpan = screen.getByText("world");
@@ -321,7 +369,8 @@ describe("HtmlHighlightReader", () => {
         <HtmlHighlightReader
           canonicalText={text}
           highlights={[highlight]}
-        />
+        />,
+        { wrapper: createWrapper() }
       );
 
       const highlightSpan = screen.getByText("world");
@@ -346,7 +395,8 @@ describe("HtmlHighlightReader", () => {
         <HtmlHighlightReader
           canonicalText={text}
           highlights={[highlight]}
-        />
+        />,
+        { wrapper: createWrapper() }
       );
 
       const highlightSpan = screen.getByText("world");
@@ -372,7 +422,8 @@ describe("HtmlHighlightReader", () => {
         <HtmlHighlightReader
           canonicalText={text}
           highlights={highlights}
-        />
+        />,
+        { wrapper: createWrapper() }
       );
 
       // Verify correct number of highlight spans
@@ -394,7 +445,8 @@ describe("HtmlHighlightReader", () => {
         <HtmlHighlightReader
           canonicalText={text}
           highlights={highlights}
-        />
+        />,
+        { wrapper: createWrapper() }
       );
 
       const highlightSpans = container.querySelectorAll("[data-highlight-id]");
@@ -416,7 +468,8 @@ describe("HtmlHighlightReader", () => {
         <HtmlHighlightReader
           canonicalText={text}
           highlights={highlights}
-        />
+        />,
+        { wrapper: createWrapper() }
       );
 
       // Get all highlight spans in DOM order
@@ -426,6 +479,477 @@ describe("HtmlHighlightReader", () => {
       expect(spans[0]).toHaveAttribute("data-highlight-id", "hl_1");
       expect(spans[1]).toHaveAttribute("data-highlight-id", "hl_2");
       expect(spans[2]).toHaveAttribute("data-highlight-id", "hl_3");
+    });
+  });
+});
+
+// =============================================================================
+// Highlight Creation Flow Tests (PR6)
+// =============================================================================
+
+describe("HtmlHighlightReader - highlight creation flow", () => {
+  beforeEach(() => {
+    resetUIStore();
+    vi.clearAllMocks();
+    // Reset window.getSelection mock
+    vi.spyOn(window, "getSelection").mockRestore();
+  });
+
+  /**
+   * Helper to mock window.getSelection with specific text.
+   * This simulates the browser selection API.
+   */
+  function mockSelection(
+    selectedText: string,
+    isCollapsed: boolean = false,
+    containerElement?: Element | null
+  ) {
+    const mockRange = {
+      toString: () => selectedText,
+      commonAncestorContainer: containerElement,
+    };
+
+    const mockSelectionObj = {
+      isCollapsed,
+      toString: () => selectedText,
+      anchorNode: containerElement,
+      focusNode: containerElement,
+      removeAllRanges: vi.fn(),
+      getRangeAt: () => mockRange,
+      rangeCount: isCollapsed ? 0 : 1,
+    };
+
+    vi.spyOn(window, "getSelection").mockReturnValue(
+      mockSelectionObj as unknown as Selection
+    );
+
+    return mockSelectionObj;
+  }
+
+  test("does not show selection UI when documentId is not provided", () => {
+    const text = "Hello, world!";
+
+    render(
+      <HtmlHighlightReader
+        canonicalText={text}
+        highlights={[]}
+        // No documentId - selection disabled
+      />,
+      { wrapper: createWrapper() }
+    );
+
+    // Trigger mouseup
+    const reader = screen.getByTestId("html-reader");
+    mockSelection("world", false, reader);
+    fireEvent.mouseUp(reader);
+
+    // Should not show selection action bar
+    expect(screen.queryByTestId("selection-action-bar")).not.toBeInTheDocument();
+  });
+
+  test("shows selection action bar when text is selected", async () => {
+    const text = "Hello, world!";
+
+    render(
+      <HtmlHighlightReader
+        canonicalText={text}
+        highlights={[]}
+        documentId="doc_test123"
+      />,
+      { wrapper: createWrapper() }
+    );
+
+    // Setup mock selection before mouseup
+    const reader = screen.getByTestId("html-reader");
+    mockSelection("world", false, reader);
+
+    // Trigger mouseup
+    fireEvent.mouseUp(reader);
+
+    // Should show selection action bar
+    expect(screen.getByTestId("selection-action-bar")).toBeInTheDocument();
+    expect(screen.getByTestId("create-highlight-btn")).toBeInTheDocument();
+    expect(screen.getByTestId("cancel-selection-btn")).toBeInTheDocument();
+  });
+
+  test("does not show selection UI for collapsed (empty) selection", () => {
+    const text = "Hello, world!";
+
+    render(
+      <HtmlHighlightReader
+        canonicalText={text}
+        highlights={[]}
+        documentId="doc_test123"
+      />,
+      { wrapper: createWrapper() }
+    );
+
+    const reader = screen.getByTestId("html-reader");
+    mockSelection("", true, reader); // collapsed selection
+
+    fireEvent.mouseUp(reader);
+
+    expect(screen.queryByTestId("selection-action-bar")).not.toBeInTheDocument();
+  });
+
+  test("cancel button clears selection state", async () => {
+    const text = "Hello, world!";
+
+    render(
+      <HtmlHighlightReader
+        canonicalText={text}
+        highlights={[]}
+        documentId="doc_test123"
+      />,
+      { wrapper: createWrapper() }
+    );
+
+    const reader = screen.getByTestId("html-reader");
+    const mockSel = mockSelection("world", false, reader);
+
+    // Trigger selection
+    fireEvent.mouseUp(reader);
+    expect(screen.getByTestId("selection-action-bar")).toBeInTheDocument();
+
+    // Click cancel
+    fireEvent.click(screen.getByTestId("cancel-selection-btn"));
+
+    // Action bar should disappear
+    expect(screen.queryByTestId("selection-action-bar")).not.toBeInTheDocument();
+    expect(mockSel.removeAllRanges).toHaveBeenCalled();
+  });
+
+  test("escape key cancels selection", async () => {
+    const text = "Hello, world!";
+
+    render(
+      <HtmlHighlightReader
+        canonicalText={text}
+        highlights={[]}
+        documentId="doc_test123"
+      />,
+      { wrapper: createWrapper() }
+    );
+
+    const reader = screen.getByTestId("html-reader");
+    const mockSel = mockSelection("world", false, reader);
+
+    // Trigger selection
+    fireEvent.mouseUp(reader);
+    expect(screen.getByTestId("selection-action-bar")).toBeInTheDocument();
+
+    // Press escape
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    // Action bar should disappear
+    expect(screen.queryByTestId("selection-action-bar")).not.toBeInTheDocument();
+    expect(mockSel.removeAllRanges).toHaveBeenCalled();
+  });
+
+  test("clicking outside action bar cancels selection", async () => {
+    const text = "Hello, world!";
+
+    render(
+      <HtmlHighlightReader
+        canonicalText={text}
+        highlights={[]}
+        documentId="doc_test123"
+      />,
+      { wrapper: createWrapper() }
+    );
+
+    const reader = screen.getByTestId("html-reader");
+    const mockSel = mockSelection("world", false, reader);
+
+    // Trigger selection
+    fireEvent.mouseUp(reader);
+    expect(screen.getByTestId("selection-action-bar")).toBeInTheDocument();
+
+    // Click outside (on document body)
+    fireEvent.mouseDown(document.body);
+
+    // Action bar should disappear
+    expect(screen.queryByTestId("selection-action-bar")).not.toBeInTheDocument();
+    expect(mockSel.removeAllRanges).toHaveBeenCalled();
+  });
+
+  test("calls createHighlight API with correct offsets on confirm", async () => {
+    const text = "Hello, world!";
+    const documentId = "doc_test123";
+
+    const createdHighlight: HighlightItem = {
+      id: "hl_new123",
+      document_id: documentId,
+      text_start: 7,
+      text_end: 12,
+      quote: "world",
+      created_at: "2025-01-01T12:00:00Z",
+      updated_at: "2025-01-01T12:00:00Z",
+    };
+
+    mockCreateHighlight.mockResolvedValue(createdHighlight);
+
+    render(
+      <HtmlHighlightReader
+        canonicalText={text}
+        highlights={[]}
+        documentId={documentId}
+      />,
+      { wrapper: createWrapper() }
+    );
+
+    const reader = screen.getByTestId("html-reader");
+    mockSelection("world", false, reader);
+
+    // Trigger selection
+    fireEvent.mouseUp(reader);
+
+    // Click create highlight
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("create-highlight-btn"));
+    });
+
+    // Verify API was called with correct offsets
+    await waitFor(() => {
+      expect(mockCreateHighlight).toHaveBeenCalledWith({
+        documentId,
+        textStart: 7, // "world" starts at index 7
+        textEnd: 12, // "world" ends at index 12
+      });
+    });
+  });
+
+  test("sets new highlight as active after creation", async () => {
+    const text = "Hello, world!";
+    const documentId = "doc_test123";
+
+    const createdHighlight: HighlightItem = {
+      id: "hl_new123",
+      document_id: documentId,
+      text_start: 7,
+      text_end: 12,
+      quote: "world",
+      created_at: "2025-01-01T12:00:00Z",
+      updated_at: "2025-01-01T12:00:00Z",
+    };
+
+    mockCreateHighlight.mockResolvedValue(createdHighlight);
+
+    render(
+      <HtmlHighlightReader
+        canonicalText={text}
+        highlights={[]}
+        documentId={documentId}
+      />,
+      { wrapper: createWrapper() }
+    );
+
+    const reader = screen.getByTestId("html-reader");
+    mockSelection("world", false, reader);
+
+    fireEvent.mouseUp(reader);
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("create-highlight-btn"));
+    });
+
+    // Wait for mutation to complete
+    await waitFor(() => {
+      expect(useUIStore.getState().activeHighlightId).toBe("hl_new123");
+    });
+  });
+
+  test("calls onHighlightCreated callback after successful creation", async () => {
+    const text = "Hello, world!";
+    const documentId = "doc_test123";
+    const onHighlightCreated = vi.fn();
+
+    const createdHighlight: HighlightItem = {
+      id: "hl_new123",
+      document_id: documentId,
+      text_start: 7,
+      text_end: 12,
+      quote: "world",
+      created_at: "2025-01-01T12:00:00Z",
+      updated_at: "2025-01-01T12:00:00Z",
+    };
+
+    mockCreateHighlight.mockResolvedValue(createdHighlight);
+
+    render(
+      <HtmlHighlightReader
+        canonicalText={text}
+        highlights={[]}
+        documentId={documentId}
+        onHighlightCreated={onHighlightCreated}
+      />,
+      { wrapper: createWrapper() }
+    );
+
+    const reader = screen.getByTestId("html-reader");
+    mockSelection("world", false, reader);
+
+    fireEvent.mouseUp(reader);
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("create-highlight-btn"));
+    });
+
+    await waitFor(() => {
+      expect(onHighlightCreated).toHaveBeenCalledWith(createdHighlight);
+    });
+  });
+
+  test("shows error message when selection cannot be resolved", () => {
+    const text = "Hello, world!";
+
+    render(
+      <HtmlHighlightReader
+        canonicalText={text}
+        highlights={[]}
+        documentId="doc_test123"
+      />,
+      { wrapper: createWrapper() }
+    );
+
+    const reader = screen.getByTestId("html-reader");
+    // Mock a selection that doesn't exist in the canonical text
+    mockSelection("nonexistent text", false, reader);
+
+    fireEvent.mouseUp(reader);
+
+    // Should show error, not action bar
+    expect(screen.queryByTestId("selection-action-bar")).not.toBeInTheDocument();
+    expect(screen.getByTestId("selection-error")).toBeInTheDocument();
+    expect(screen.getByText(/Could not map selection/)).toBeInTheDocument();
+  });
+
+  test("shows error when API call fails", async () => {
+    const text = "Hello, world!";
+    const documentId = "doc_test123";
+    const onHighlightError = vi.fn();
+
+    mockCreateHighlight.mockRejectedValue(new Error("Server error"));
+
+    render(
+      <HtmlHighlightReader
+        canonicalText={text}
+        highlights={[]}
+        documentId={documentId}
+        onHighlightError={onHighlightError}
+      />,
+      { wrapper: createWrapper() }
+    );
+
+    const reader = screen.getByTestId("html-reader");
+    mockSelection("world", false, reader);
+
+    fireEvent.mouseUp(reader);
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("create-highlight-btn"));
+    });
+
+    // Should show error message
+    await waitFor(() => {
+      expect(screen.getByTestId("selection-error")).toBeInTheDocument();
+    });
+
+    expect(onHighlightError).toHaveBeenCalled();
+  });
+
+  test("clears selection action bar after successful creation", async () => {
+    const text = "Hello, world!";
+    const documentId = "doc_test123";
+
+    const createdHighlight: HighlightItem = {
+      id: "hl_new123",
+      document_id: documentId,
+      text_start: 7,
+      text_end: 12,
+      quote: "world",
+      created_at: "2025-01-01T12:00:00Z",
+      updated_at: "2025-01-01T12:00:00Z",
+    };
+
+    mockCreateHighlight.mockResolvedValue(createdHighlight);
+
+    render(
+      <HtmlHighlightReader
+        canonicalText={text}
+        highlights={[]}
+        documentId={documentId}
+      />,
+      { wrapper: createWrapper() }
+    );
+
+    const reader = screen.getByTestId("html-reader");
+    const mockSel = mockSelection("world", false, reader);
+
+    fireEvent.mouseUp(reader);
+    expect(screen.getByTestId("selection-action-bar")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("create-highlight-btn"));
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("selection-action-bar")).not.toBeInTheDocument();
+    });
+
+    expect(mockSel.removeAllRanges).toHaveBeenCalled();
+  });
+
+  test("disables create button while creation is pending", async () => {
+    const text = "Hello, world!";
+    const documentId = "doc_test123";
+
+    // Make the API call hang
+    let resolvePromise: (value: HighlightItem) => void;
+    mockCreateHighlight.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvePromise = resolve;
+        })
+    );
+
+    render(
+      <HtmlHighlightReader
+        canonicalText={text}
+        highlights={[]}
+        documentId={documentId}
+      />,
+      { wrapper: createWrapper() }
+    );
+
+    const reader = screen.getByTestId("html-reader");
+    mockSelection("world", false, reader);
+
+    fireEvent.mouseUp(reader);
+
+    const createBtn = screen.getByTestId("create-highlight-btn");
+    expect(createBtn).not.toBeDisabled();
+
+    // Click to start creation
+    fireEvent.click(createBtn);
+
+    // Button should be disabled while pending
+    await waitFor(() => {
+      expect(createBtn).toBeDisabled();
+      expect(createBtn).toHaveTextContent("Creating...");
+    });
+
+    // Resolve the promise
+    await act(async () => {
+      resolvePromise!({
+        id: "hl_new123",
+        document_id: documentId,
+        text_start: 7,
+        text_end: 12,
+        quote: "world",
+        created_at: "2025-01-01T12:00:00Z",
+        updated_at: "2025-01-01T12:00:00Z",
+      });
     });
   });
 });

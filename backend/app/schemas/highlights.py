@@ -199,6 +199,9 @@ class AnnotationDetail(AnnotationSummary):
 class CreateHighlightRequest(BaseModel):
     """Request body for POST /highlights.
 
+    Generic highlight creation endpoint supporting multiple media types and anchor types.
+    For v1, only media_type="document" with anchor_type="text" is supported.
+
     Accepts a character-range anchor (text_start, text_end) which will be
     validated and mapped to the richer internal anchor format by the route handler.
 
@@ -208,12 +211,20 @@ class CreateHighlightRequest(BaseModel):
         treat them as Python/JS string indices.
 
     Attributes:
-        document_id: Typed document ID (doc_<uuid>)
+        media_type: Type of media to highlight ("document" only for v1)
+        media_id: Typed media ID (e.g., doc_<uuid> for documents)
+        anchor_type: Type of anchor ("text" only for html/epub in v1)
         text_start: Character offset start in canonical_text (>= 0)
         text_end: Character offset end in canonical_text (> text_start)
     """
 
-    document_id: str = Field(description="Typed document ID (doc_<uuid>)")
+    media_type: Literal["document"] = Field(
+        description="Type of media to highlight (only 'document' supported in v1)"
+    )
+    media_id: str = Field(description="Typed media ID (e.g., doc_<uuid> for documents)")
+    anchor_type: Literal["text"] = Field(
+        description="Type of anchor (only 'text' supported for html/epub in v1)"
+    )
     text_start: int = Field(ge=0, description="Character offset start (>= 0)")
     text_end: int = Field(gt=0, description="Character offset end (> text_start)")
 

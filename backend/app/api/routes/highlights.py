@@ -49,7 +49,7 @@ router = APIRouter(tags=["highlights"])
     response_model=DataEnvelope[HighlightItem],
     status_code=201,
     summary="Create highlight",
-    description="Create a new highlight with character-range anchor on a document.",
+    description="Create a new highlight with character-range anchor on media.",
 )
 async def create_highlight_endpoint(
     current_user: Annotated[User, Depends(rate_limit_authenticated)],
@@ -64,13 +64,15 @@ async def create_highlight_endpoint(
         treat them as Python/JS string indices.
 
     Accepts:
-    - document_id: Typed document ID (doc_<uuid>)
+    - media_type: Type of media ("document" only in v1)
+    - media_id: Typed media ID (e.g., doc_<uuid>)
+    - anchor_type: Type of anchor ("text" only for html/epub in v1)
     - text_start: Character offset start (>= 0)
     - text_end: Character offset end (> text_start)
 
     Validates:
-    - document_id is a valid typed ID with "document" type
-    - Document exists and is owned by current user
+    - media_id is a valid typed ID matching media_type
+    - Media exists and is owned by current user
     - text_start and text_end are valid (text_start < text_end, within canonical_text)
     - Quote, prefix, suffix can be computed from canonical_text
 
@@ -79,31 +81,47 @@ async def create_highlight_endpoint(
     Args:
         current_user: Authenticated user (rate limited)
         session: SQLAlchemy database session
-        request: CreateHighlightRequest with document_id, text_start, text_end
+        request: CreateHighlightRequest with media_type, media_id, anchor_type, offsets
 
     Returns:
         HighlightItem with typed IDs, offsets, quote, and timestamps
 
     Raises:
         ValidationAppError (422): If validation fails
-            - Invalid document_id format or type
+            - Invalid media_id format or type mismatch
+            - Unsupported media_type or anchor_type
             - text_start >= text_end or text_start < 0
             - text_end > canonical_text length
-        NotFoundError (404): If document doesn't exist or is not owned by user
+        NotFoundError (404): If media doesn't exist or is not owned by user
     """
-    # Parse and validate document_id
-    try:
-        doc_type, doc_uuid = from_api_id(request.document_id)
-    except ValueError as e:
+    # v1: Only support document media type
+    if request.media_type != "document":
         raise ValidationAppError(
-            message=f"Invalid document_id format: {str(e)}",
-            details={"field": "document_id", "reason": str(e)},
+            message=f"Unsupported media_type: '{request.media_type}'. Only 'document' is supported in v1.",
+            details={"field": "media_type", "value": request.media_type, "supported": ["document"]},
         )
 
-    if doc_type != "document":
+    # v1: Only support text anchor type for documents
+    if request.anchor_type != "text":
         raise ValidationAppError(
-            message=f"Invalid document_id type: expected 'document', got '{doc_type}'",
-            details={"field": "document_id", "expected_type": "document", "got_type": doc_type},
+            message=f"Unsupported anchor_type: '{request.anchor_type}'. Only 'text' is supported for documents in v1.",
+            details={"field": "anchor_type", "value": request.anchor_type, "supported": ["text"]},
+        )
+
+    # Parse and validate media_id
+    try:
+        id_type, doc_uuid = from_api_id(request.media_id)
+    except ValueError as e:
+        raise ValidationAppError(
+            message=f"Invalid media_id format: {str(e)}",
+            details={"field": "media_id", "reason": str(e)},
+        )
+
+    # Validate ID type matches media_type
+    if id_type != "document":
+        raise ValidationAppError(
+            message=f"Invalid media_id type: expected 'document' for media_type='document', got '{id_type}'",
+            details={"field": "media_id", "expected_type": "document", "got_type": id_type},
         )
 
     # Verify document exists and is owned by user
@@ -168,9 +186,9 @@ async def create_highlight_endpoint(
     highlight_summary = create_highlight(
         session=session,
         user=current_user,
-        media_type="document",
+        media_type=request.media_type,
         media_id=doc.id,
-        anchor_type="text",
+        anchor_type=request.anchor_type,
         text_start=request.text_start,
         text_end=request.text_end,
         quote=quote,

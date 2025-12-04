@@ -766,6 +766,177 @@ describe("buildAnchorTriple", () => {
 // Edge Cases and Integration Tests
 // =============================================================================
 
+// =============================================================================
+// DOM-like Selection → Canonical Offset Tests (for PR6 highlight creation)
+// =============================================================================
+
+describe("selection to offset mapping for highlight creation", () => {
+  /**
+   * These tests verify the flow from user text selection to canonical offsets,
+   * which is the core of highlight creation in the HtmlHighlightReader.
+   *
+   * In the real component:
+   * 1. User selects text in the reader
+   * 2. window.getSelection().toString() gives us the selection text
+   * 3. We call resolveSelectionToCanonicalOffsets to map it to offsets
+   * 4. We POST to /highlights with those offsets
+   */
+
+  test("simple selection in plain paragraph", () => {
+    // Simulates: <p>hello world this is a test</p>
+    // User selects "world this"
+    const canonicalText = "hello world this is a test";
+    const selectionText = "world this";
+
+    const result = resolveSelectionToCanonicalOffsets({
+      canonicalText,
+      selectionText,
+    });
+
+    expect(result.status).toBe("resolved");
+    expect(result.start).toBe(6); // "world" starts at index 6
+    expect(result.end).toBe(16); // "world this" ends at index 16
+    expect(canonicalText.slice(result.start!, result.end!)).toBe("world this");
+  });
+
+  test("selection spanning multiple sentences", () => {
+    const canonicalText = "First sentence. Second sentence. Third sentence.";
+    const selectionText = "sentence. Second";
+
+    const result = resolveSelectionToCanonicalOffsets({
+      canonicalText,
+      selectionText,
+    });
+
+    expect(result.status).toBe("resolved");
+    expect(canonicalText.slice(result.start!, result.end!)).toBe("sentence. Second");
+  });
+
+  test("selection with newlines (multi-paragraph)", () => {
+    const canonicalText = "Paragraph one.\n\nParagraph two.\n\nParagraph three.";
+    const selectionText = "one.\n\nParagraph two";
+
+    const result = resolveSelectionToCanonicalOffsets({
+      canonicalText,
+      selectionText,
+    });
+
+    expect(result.status).toBe("resolved");
+    expect(canonicalText.slice(result.start!, result.end!)).toBe("one.\n\nParagraph two");
+  });
+
+  test("selection at document start", () => {
+    const canonicalText = "Beginning of the document with more text.";
+    const selectionText = "Beginning of";
+
+    const result = resolveSelectionToCanonicalOffsets({
+      canonicalText,
+      selectionText,
+    });
+
+    expect(result.status).toBe("resolved");
+    expect(result.start).toBe(0);
+    expect(canonicalText.slice(result.start!, result.end!)).toBe("Beginning of");
+  });
+
+  test("selection at document end", () => {
+    const canonicalText = "Some text at the end.";
+    const selectionText = "the end.";
+
+    const result = resolveSelectionToCanonicalOffsets({
+      canonicalText,
+      selectionText,
+    });
+
+    expect(result.status).toBe("resolved");
+    expect(result.end).toBe(canonicalText.length);
+    expect(canonicalText.slice(result.start!, result.end!)).toBe("the end.");
+  });
+
+  test("selection with extra whitespace from browser (trimmed)", () => {
+    // Browsers sometimes include leading/trailing whitespace in selections
+    const canonicalText = "The quick brown fox jumps.";
+    const selectionText = "  brown fox  "; // extra whitespace
+
+    const result = resolveSelectionToCanonicalOffsets({
+      canonicalText,
+      selectionText,
+    });
+
+    expect(result.status).toBe("resolved");
+    expect(canonicalText.slice(result.start!, result.end!)).toBe("brown fox");
+  });
+
+  test("selection that appears multiple times uses first occurrence", () => {
+    const canonicalText = "the cat sat on the mat";
+    const selectionText = "the"; // appears twice
+
+    const result = resolveSelectionToCanonicalOffsets({
+      canonicalText,
+      selectionText,
+    });
+
+    expect(result.status).toBe("resolved");
+    expect(result.start).toBe(0); // first occurrence
+    expect(result.end).toBe(3);
+  });
+
+  test("selection that appears multiple times uses hint when provided", () => {
+    const canonicalText = "the cat sat on the mat";
+    const selectionText = "the";
+
+    // Hint is near the second occurrence (position 15)
+    const result = resolveSelectionToCanonicalOffsets({
+      canonicalText,
+      selectionText,
+      approximateStart: 15,
+    });
+
+    expect(result.status).toBe("resolved");
+    expect(result.start).toBe(15); // second occurrence
+    expect(result.end).toBe(18);
+  });
+
+  test("selection with special characters", () => {
+    const canonicalText = "Price: $99.99 (50% off!)";
+    const selectionText = "$99.99 (50%";
+
+    const result = resolveSelectionToCanonicalOffsets({
+      canonicalText,
+      selectionText,
+    });
+
+    expect(result.status).toBe("resolved");
+    expect(canonicalText.slice(result.start!, result.end!)).toBe("$99.99 (50%");
+  });
+
+  test("selection not found returns unresolved", () => {
+    const canonicalText = "The quick brown fox";
+    const selectionText = "lazy dog"; // not in text
+
+    const result = resolveSelectionToCanonicalOffsets({
+      canonicalText,
+      selectionText,
+    });
+
+    expect(result.status).toBe("unresolved");
+    expect(result.reason).toBe("selection_not_found_in_canonical_text");
+  });
+
+  test("empty selection returns unresolved", () => {
+    const canonicalText = "Some text here";
+    const selectionText = "";
+
+    const result = resolveSelectionToCanonicalOffsets({
+      canonicalText,
+      selectionText,
+    });
+
+    expect(result.status).toBe("unresolved");
+    expect(result.reason).toBe("empty_or_whitespace_selection");
+  });
+});
+
 describe("edge cases and integration", () => {
   test("unicode text handling (ASCII equivalent for v1)", () => {
     // For v1, we assume English text where string indices === byte offsets

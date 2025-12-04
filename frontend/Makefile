@@ -1,4 +1,4 @@
-.PHONY: help install dev build test lint format format-check clean
+.PHONY: help install dev build test lint format format-check generate-api clean
 
 help:
 	@echo "Frontend Makefile"
@@ -10,6 +10,7 @@ help:
 	@echo "  make lint         Run linter (eslint)"
 	@echo "  make format       Auto-format code (prettier)"
 	@echo "  make format-check Check formatting (prettier)"
+	@echo "  make generate-api Generate TypeScript API client from OpenAPI schema"
 	@echo "  make clean        Remove node_modules and dist"
 
 PNPM := pnpm
@@ -47,6 +48,11 @@ format-check: install
 	@echo "Checking formatting with Prettier..."
 	$(PNPM) run format:check
 	@echo "✓ Formatting check passed"
+
+generate-api: install
+	@echo "Generating TypeScript API client..."
+	$(PNPM) run generate:api
+	@echo "✓ API client generated"
 
 clean:
 	@echo "Cleaning up..."
