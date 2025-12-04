@@ -1,4 +1,4 @@
-.PHONY: help infra infra-up infra-down infra-wait backend-dev frontend-dev backend-test backend-test-integration backend-test-all backend-lint backend-format backend-full frontend-test frontend-lint frontend-format frontend-full test-infra-up test-infra-down clean
+.PHONY: help infra infra-up infra-down infra-wait backend-dev frontend-dev backend-test backend-test-integration backend-test-all backend-lint backend-format backend-full frontend-test frontend-lint frontend-format frontend-full frontend-generate-api test-infra-up test-infra-down clean
 
 help:
 	@echo "Nexus Development Commands"
@@ -20,15 +20,16 @@ help:
 	@echo "  make backend-format           Auto-format code (black, ruff)"
 	@echo "  make backend-full             Full setup & checks (install + lint + format + test + type-check)"
 	@echo ""
+	@echo "Frontend Quality Checks:"
+	@echo "  make frontend-test            Run frontend tests"
+	@echo "  make frontend-lint            Run linter (eslint - check only)"
+	@echo "  make frontend-format          Auto-format code (prettier)"
+	@echo "  make frontend-full            Full setup & checks (install + lint + format + test)"
+	@echo "  make frontend-generate-api    Generate TypeScript API client from OpenAPI schema"
+	@echo ""
 	@echo "Test Infrastructure:"
 	@echo "  make test-infra-up   Start test infrastructure (test-db, test-redis, test-worker)"
 	@echo "  make test-infra-down Stop test infrastructure"
-	@echo ""
-	@echo "Frontend Quality Checks:"
-	@echo "  make frontend-test   Run frontend tests"
-	@echo "  make frontend-lint   Run linter (eslint - check only)"
-	@echo "  make frontend-format Auto-format code (prettier)"
-	@echo "  make frontend-full   Full setup & checks (install + lint + format + test)"
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  make clean         Remove venv, node_modules, build artifacts"
@@ -182,6 +183,9 @@ frontend-format:
 frontend-full: frontend-lint frontend-format frontend-test
 	cd frontend && make install
 	@echo "✓ Frontend full checks passed"
+
+frontend-generate-api:
+	cd frontend && make generate-api
 
 # ============================================================================
 # Cleanup

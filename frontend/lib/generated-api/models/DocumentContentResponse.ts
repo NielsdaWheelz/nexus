@@ -34,10 +34,20 @@ export type DocumentContentResponse = {
     /**
      * Type of source document
      */
-    source_kind: 'pdf' | 'epub' | 'html';
+    source_kind: DocumentContentResponse.source_kind;
     /**
      * Length of canonical_text in characters
      */
     text_length: number;
 };
+export namespace DocumentContentResponse {
+    /**
+     * Type of source document
+     */
+    export enum source_kind {
+        PDF = 'pdf',
+        EPUB = 'epub',
+        HTML = 'html',
+    }
+}
 

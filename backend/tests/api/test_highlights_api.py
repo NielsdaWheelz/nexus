@@ -129,7 +129,9 @@ class TestCreateHighlight:
         response = client_authenticated.post(
             "/highlights",
             json={
-                "document_id": doc_typed_id,
+                "media_type": "document",
+                "media_id": doc_typed_id,
+                "anchor_type": "text",
                 "text_start": 4,
                 "text_end": 19,
             },
@@ -156,13 +158,16 @@ class TestCreateHighlight:
         assert highlight.text_end == 19
         assert highlight.quote == "quick brown fox"
         assert highlight.anchor_type == "text"
+        assert highlight.media_type == "document"
 
-    def test_invalid_document_id_format(self, client_authenticated: TestClient):
-        """Test that invalid document ID format returns 422."""
+    def test_invalid_media_id_format(self, client_authenticated: TestClient):
+        """Test that invalid media ID format returns 422."""
         response = client_authenticated.post(
             "/highlights",
             json={
-                "document_id": "invalid_id_format",
+                "media_type": "document",
+                "media_id": "invalid_id_format",
+                "anchor_type": "text",
                 "text_start": 0,
                 "text_end": 10,
             },
@@ -172,11 +177,11 @@ class TestCreateHighlight:
         data = response.json()
         assert data["error"]["code"] == "VALIDATION_ERROR"
         assert (
-            "document_id" in str(data["error"])
-            or "Invalid document_id format" in data["error"]["message"]
+            "media_id" in str(data["error"])
+            or "Invalid media_id format" in data["error"]["message"]
         )
 
-    def test_invalid_document_id_type(
+    def test_invalid_media_id_type(
         self,
         client_authenticated: TestClient,
         authenticated_user: User,
@@ -187,7 +192,9 @@ class TestCreateHighlight:
         response = client_authenticated.post(
             "/highlights",
             json={
-                "document_id": user_typed_id,
+                "media_type": "document",
+                "media_id": user_typed_id,
+                "anchor_type": "text",
                 "text_start": 0,
                 "text_end": 10,
             },
@@ -204,7 +211,9 @@ class TestCreateHighlight:
         response = client_authenticated.post(
             "/highlights",
             json={
-                "document_id": fake_doc_id,
+                "media_type": "document",
+                "media_id": fake_doc_id,
+                "anchor_type": "text",
                 "text_start": 0,
                 "text_end": 10,
             },
@@ -226,7 +235,9 @@ class TestCreateHighlight:
         response = client_authenticated.post(
             "/highlights",
             json={
-                "document_id": doc_typed_id,
+                "media_type": "document",
+                "media_id": doc_typed_id,
+                "anchor_type": "text",
                 "text_start": 0,
                 "text_end": 10,
             },
@@ -247,7 +258,9 @@ class TestCreateHighlight:
         response = client_authenticated.post(
             "/highlights",
             json={
-                "document_id": doc_typed_id,
+                "media_type": "document",
+                "media_id": doc_typed_id,
+                "anchor_type": "text",
                 "text_start": -1,
                 "text_end": 10,
             },
@@ -266,7 +279,9 @@ class TestCreateHighlight:
         response = client_authenticated.post(
             "/highlights",
             json={
-                "document_id": doc_typed_id,
+                "media_type": "document",
+                "media_id": doc_typed_id,
+                "anchor_type": "text",
                 "text_start": 10,
                 "text_end": 5,
             },
@@ -286,7 +301,9 @@ class TestCreateHighlight:
         response = client_authenticated.post(
             "/highlights",
             json={
-                "document_id": doc_typed_id,
+                "media_type": "document",
+                "media_id": doc_typed_id,
+                "anchor_type": "text",
                 "text_start": 0,
                 "text_end": canonical_length + 100,
             },
@@ -303,7 +320,9 @@ class TestCreateHighlight:
         response = client.post(
             "/highlights",
             json={
-                "document_id": doc_typed_id,
+                "media_type": "document",
+                "media_id": doc_typed_id,
+                "anchor_type": "text",
                 "text_start": 0,
                 "text_end": 10,
             },
@@ -668,7 +687,9 @@ class TestHighlightErrorEnvelopes:
         response = client_authenticated.post(
             "/highlights",
             json={
-                "document_id": doc_typed_id,
+                "media_type": "document",
+                "media_id": doc_typed_id,
+                "anchor_type": "text",
                 "text_start": 1000,
                 "text_end": 2000,  # Out of bounds
             },

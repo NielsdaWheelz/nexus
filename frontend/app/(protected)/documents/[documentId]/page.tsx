@@ -185,6 +185,7 @@ function DocumentReader({
       <HtmlHighlightReader
         canonicalText={canonicalText}
         highlights={highlights}
+        documentId={documentId}
       />
     );
   }

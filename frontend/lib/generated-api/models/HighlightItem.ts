@@ -10,7 +10,8 @@
  * Offset Semantics (v1):
  * text_start and text_end are zero-indexed positions into canonical_text
  * treated as a sequence of Unicode code points. For practical purposes,
- * treat them as Python/JS string indices.
+ * treat them as Python/JS string indices. This keeps frontend/backend
+ * semantically aligned without byte↔codepoint mapping.
  *
  * Attributes:
  * id: Typed highlight ID (hl_<uuid>)

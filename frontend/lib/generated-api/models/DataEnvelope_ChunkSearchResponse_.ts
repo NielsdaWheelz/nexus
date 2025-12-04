@@ -2,11 +2,11 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-import type { DocumentContentResponse } from './DocumentContentResponse';
-export type DataEnvelope_DocumentContentResponse_ = {
+import type { ChunkSearchResponse } from './ChunkSearchResponse';
+export type DataEnvelope_ChunkSearchResponse_ = {
     /**
      * Response data (resource, list, or object)
      */
-    data: DocumentContentResponse;
+    data: ChunkSearchResponse;
 };
 
