@@ -50,8 +50,13 @@ This document is the single source of truth for the Nexus domain model. It defin
 
 - A globally deduplicated content item.
 - Kinds in v1: `html`, `epub`, `pdf`.
-- Essential attributes: id, kind, canonical_url, source, uploader_user_id, html, plain_text, storage_path, processing_status, failure_reason, created_at, updated_at, processing_started_at, processing_completed_at.
+- Essential attributes: id, kind, canonical_url, source, uploader_user_id, content_hash, html, plain_text, storage_path, processing_status, failure_reason, created_at, updated_at, processing_started_at, processing_completed_at.
 - processing_status enum: `pending`, `processing`, `ready_for_reading`, `indexed`, `failed`.
+- source enum: `upload`, `url`.
+  - If source='upload': storage_path NOT NULL, canonical_url NULL
+  - If source='url': canonical_url NOT NULL, storage_path MAY be NULL
+- content_hash: SHA-256 hash, primary deduplication key (unique constraint)
+- canonical_url: metadata only, NOT a deduplication key
 
 ### LibraryMedia
 
@@ -63,6 +68,32 @@ This document is the single source of truth for the Nexus domain model. It defin
 - A globally deduplicated author entity.
 - Essential attributes: id, name, created_at.
 
+**Author Subsystem Ownership (Clarified):**
+
+Authors are managed by multiple subsystems with distinct responsibilities:
+
+**Ingestion subsystem (v1):**
+- Best-effort extraction from document metadata during ingestion (HTML `<meta>`, EPUB `<dc:creator>`)
+- Automatic creation of `author` rows (exact string match, no normalization)
+- Splitting author strings on separators (comma, " and ", " & ")
+- Insert-only: NEVER updates or deletes existing author rows
+- This creates a messy author table with low-quality entries ("NYTimes Staff", "Unknown", "–")
+- Naive splitting produces garbage (e.g., "Smith, John and Jane Doe" → 3 entries)
+
+**User-initiated metadata entry (v1):**
+- Users can manually create authors via UI (for missing/incorrect metadata)
+- Create-only: users CANNOT edit or delete authors in v1
+
+**Metadata subsystem (future, post-v1):**
+- Will own comprehensive author management (editing, merging, disambiguation)
+- May use LLM or external APIs for normalization
+- Out of scope for v1
+
+**Constraints:**
+- v1 uses exact string match for deduplication; no normalization or disambiguation
+- Media may have zero authors; absence is allowed and does not block processing
+- Author correctness is not guaranteed in v1; expect low data quality
+
 ### MediaAuthor
 
 - Association between media and authors.
@@ -73,7 +104,7 @@ This document is the single source of truth for the Nexus domain model. It defin
 
 - A segment of media content for a given chunking strategy.
 - Essential attributes: id, media_id, chunking_strategy, sequence_index, content, embedding, created_at.
-- chunking_strategy is an enum-like string; v1 values include `tokens_v1`, `sections_v1`.
+- chunking_strategy is an enum-like string; v1 default: `recursive_character`.
 - embedding is stored as a pgvector type and indexed for ANN (approximate nearest neighbor) search.
 - Constraint: For each (media_id, chunking_strategy), either zero chunks exist or a complete, consistent chunk set exists.
 
@@ -204,18 +235,32 @@ A user may see a social object if and only if:
 
 ### Media Invariants
 
-- Media is intended to be globally deduplicated by content identity (e.g., content hashing or canonical URL). The exact deduplication strategy is implementation-defined and may evolve.
-- Deduplication is best-effort, not guaranteed. Matching is primarily content-based; canonical URL is a hint.
-- Upload deduplication: if media already exists, add it to user's library rather than creating a new media record.
-- Media cannot be deleted by users; they can only remove it from their libraries.
-- User can read media once processing_status reaches `ready_for_reading`.
-- Semantic search is available once processing_status reaches `indexed`.
-- **Tier limits on media count in default library:**
+**Deduplication (Strict Content-Based):**
+- Media is globally deduplicated by `content_hash` (SHA-256 of raw bytes)
+- Unique constraint on `media(content_hash)` enforces strict deduplication at database level
+- All `content_hash` values MUST be populated (no NULL allowed in v1)
+- Two media rows with identical `content_hash` MUST NOT exist (database-enforced)
+- Deduplication is strict and deterministic: identical bytes always map to the same media_id
+- `canonical_url` is metadata only, NOT a deduplication key:
+  - Multiple different URLs MAY map to same media_id (if content identical)
+  - Multiple different media_id MAY have identical canonical_url (if content differs)
+- **Product-level deduplication semantics:**
+  - "No duplicate documents" means "no two rows with identical bytes" (guaranteed)
+  - Does NOT mean "no two rows that are conceptually the same text" (best-effort only)
+  - Cannot prevent logical duplicates (same article with different HTML formatting)
+- First upload of content is canonical; v1 does not support content updates or re-ingestion
+- Upload deduplication: if media already exists (content_hash match), add it to user's library rather than creating a new media record
+
+**Other invariants:**
+- Media cannot be deleted by users; they can only remove it from their libraries
+- User can read media once processing_status reaches `ready_for_reading`
+- Semantic search is available once processing_status reaches `indexed`
+- **Tier limits on media count in default library (enforced by quota/billing subsystem, not ingestion):**
   - Free tier: maximum 5 media in default library
   - Personal tier: unlimited media
   - Pro tier: unlimited media
-- Attempting to add media beyond tier limit prompts upgrade flow.
-- Limits apply at default library level (all media must be in default library per existing invariants).
+- Attempting to add media beyond tier limit prompts upgrade flow
+- Limits apply at default library level (all media must be in default library per existing invariants)
 
 ### Chunk Invariants
 
@@ -231,7 +276,7 @@ A user may see a social object if and only if:
 
 - Highlights can exist without annotations. Annotations can only exist if attached to a highlight.
 - Deleting a highlight deletes its annotation (if one exists).
-- Deleting an annotation does NOT delete the highlight; the highlight remains without a note.
+- Deleting an annotation deletes the highlight as well (v1 product decision; changed from earlier "annotation-only delete" model).
 - Messages referencing a deleted highlight or annotation are not deleted; their MessageContext rows referencing that target are deleted. UI must handle "this note was deleted" gracefully if needed.
 
 ### Conversation & Message Invariants
@@ -372,8 +417,17 @@ Stripe webhook synchronization:
 
 - `media.plain_text` is the canonical linear text representation of the media.
 - All character offsets, chunking, embeddings, search indices, and highlight ranges are measured against `plain_text`.
-- `media.html` is display HTML derived from processing; it is not the source of truth for offsets.
-- **Invariant:** The canonical text used for chunking/embeddings and highlight offsets must be produced by the same deterministic extraction algorithm from `media.html` (for html/epub) or backend PDF processing (for pdf). This ensures offsets are stable and mappable across ingestion and rendering.
+- For HTML/EPUB media:
+  - `media.html` is the "clean reading HTML" produced at ingestion (article content only, no ads/navigation/chrome).
+  - `media.plain_text` is a deterministic linearization of `media.html` in document order.
+  - The reader subsystem MUST render highlights and perform text selection using the DOM derived from `media.html` (not by re-running extraction or re-fetching the URL).
+  - This guarantees that highlight offsets into `plain_text` map correctly to the rendered DOM.
+- For PDF media:
+  - `media.plain_text` is extracted from the PDF at ingestion using deterministic text extraction in reading order.
+  - `media.html` is NULL (PDF rendering uses pdf.js on frontend).
+  - The reader subsystem MUST use the pdf.js text layer for offset mapping and highlighting.
+  - For PDFs without text layers (scanned/image-only): `plain_text` is empty, highlighting is disallowed by reader subsystem, and semantic search is unavailable.
+- **Invariant:** For media with `plain_text` empty, highlight creation MUST be disallowed by reader subsystem (not ingestion), and chunking/embedding MUST NOT run. Such media remain `ready_for_reading` but never transition to `indexed`.
 
 ### Offset Model
 
