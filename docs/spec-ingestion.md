@@ -310,7 +310,7 @@ All endpoints require authentication. `user_id` is extracted from session/JWT.
 **Behavior:**
 1. Validate `kind` enum (`epub` or `pdf`).
 2. Validate file size: PDF ≤ 50 MB, EPUB ≤ 25 MB.
-3. Validate file MIME type matches `kind` (magic bytes check: PDF = `%PDF`, EPUB = ZIP with `mimetype` entry).
+3. Validate file MIME type matches `kind` (magic bytes check: PDF = `%PDF`, EPUB = ZIP with `mimetype` entry). Use a magic-byte detector (e.g., `file-type`) as the primary check; only fall back to extension if detector returns null.
 4. Check user's tier limit by calling quota/billing subsystem: if limit exceeded, return `403 TIER_LIMIT_EXCEEDED`. **Fail-open policy:** if quota/billing is unavailable or times out (2s budget), proceed with ingestion, mark the media as `tier_check_deferred=true` in logs/metrics, and enqueue an async reconciliation job; reconciliation MAY later remove LibraryMedia rows and surface a user notice if over limit.
 5. Compute content hash (SHA-256 of file bytes).
 6. Attempt to insert `Media` row with `INSERT ... ON CONFLICT (content_hash) DO NOTHING RETURNING id`:
@@ -321,6 +321,7 @@ All endpoints require authentication. `user_id` is extracted from session/JWT.
 9. Insert `LibraryMedia` row linking media to user's default library.
 10. Enqueue `extract_media_task(media_id)` to Celery.
 11. Return `201` with `is_duplicate: false`.
+12. Implementation note: any temporary files used for parsing (e.g., EPUB unzip) MUST be cleaned up in a `finally` block.
 
 **Idempotency:** Duplicate file uploads (same content hash) do not create new media rows or duplicate storage objects.
 
@@ -647,6 +648,9 @@ All jobs are Celery tasks with two distinct failure modes and retry behaviors:
 - Author parsing MAY strip deterministic byline prefixes (`by`, `from`), trim punctuation, drop obvious stopwords (`staff`, `press release`, wire services), and split on `,`, `;`, `/`, `and`, `&`, or `with`. After cleaning, names are inserted exactly as parsed (no merging/disambiguation beyond de-duplication by identical string).
 - Date parsing MAY normalize to ISO8601 when unambiguous; otherwise return raw string.
 - Metadata resolution MUST NOT call LLMs. Any inference logic MUST be deterministic and bounded.
+- Metadata flattening MUST be deterministic: if parser metadata values are objects/arrays, flatten them into strings via a pure function (e.g., prefer `name`, `value`, `text`, `title` fields; join multi-values with `, `). Store raw flattened strings as `meta_{key}` for auditability.
+- Pinned PDF metadata key sets (authors first, then dates): `["Author","author","Creator","creator","dc:creator","dc:contributors","meta:author"]`; dates: `["CreationDate","ModDate","Date","xap:CreateDate","xmp:CreateDate","dcterms:created","meta:creation-date"]`.
+- Pinned EPUB metadata key sets: authors `["creator","creatorfileas","contributor","author"]`; dates `["date","modified","pubdate","published"]`. Traverse spine in order, then apply the same DOM text traversal rules as HTML for canonical text.
 
 **Transaction Boundaries:**
 - Status transition `pending → processing`: atomic update with row lock
