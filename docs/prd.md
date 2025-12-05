@@ -109,7 +109,7 @@ For PDFs without text layers (scanned/image-only), ingestion produces `plain_tex
 - State transitions: `pending` → `processing` → `ready_for_reading` → `indexed`
 - Failure can occur at any stage: `processing` → `failed` or `ready_for_reading` → `failed`
 - Retries reset status to `pending` and delete partial chunks/embeddings
-- Media added to any library is auto-added to default library
+- Media a user uploads or explicitly adds to any library they belong to is auto-added to that user’s default library. Media added by other members to a shared library does not auto-add into your default.
 - Deduplication is content-based (content_hash), not URL-based; first upload is canonical
 - v1 does not support content updates or re-ingestion
 
@@ -217,7 +217,7 @@ For PDFs without text layers (scanned/image-only), ingestion produces `plain_tex
 - Owner MUST always be a member with role `admin`
 - Owner cannot leave library without transferring ownership or deleting it
 - Library is "shared" iff LibraryUser count > 1
-- Adding media to any library auto-adds to default library
+- When a user explicitly adds media to any library they belong to (including uploads), it auto-adds to that user’s default library. Media added by other members to a shared library does not auto-add into your default.
 
 **Visible States:**
 - Default library: marked distinctly, no share/delete options
@@ -390,18 +390,17 @@ For PDFs without text layers (scanned/image-only), ingestion produces `plain_tex
 
 ### 4.2 Default Library Semantics (Explicit Model)
 
-**DECISION: Default Library as Universal Personal Catalog**
+**DECISION: Default Library as Explicit Personal Catalog**
 
-The default library represents the user's complete "universe of reading"—every media item they have ever encountered in any library.
+The default library represents the media a user explicitly adds or uploads. Membership in a shared library does not auto-import that library’s media.
 
 **Invariants (must be enforced):**
-1. When user adds media M to ANY library, M is automatically added to default library
-2. When user is added to shared library, all media in that library appear in default library
+1. When user uploads media or explicitly adds media M to ANY library they are a member of, M is automatically added to default library
+2. Joining a shared library does NOT auto-add that library’s media into default
 3. Removing media from default library removes it from all unshared libraries user owns (member_count == 1)
 4. Removing media from default library does NOT remove it from shared libraries
-5. When shared library becomes unshared (member_count → 1), all its media must be in default library
-6. Default library has exactly one member (the owner) and is never shareable
-7. Default library cannot be renamed, deleted, or have members added
+5. Default library has exactly one member (the owner) and is never shareable
+6. Default library cannot be renamed, deleted, or have members added
 
 **Cascade Deletion on Default Library Removal:**
 When user removes media M from default library:
@@ -411,17 +410,16 @@ When user removes media M from default library:
 - User can cancel if they don't want cascade deletion
 
 **Test Scenarios (must be explicitly covered):**
-1. Add media to shared library → appears in default
-2. Leave shared library → media remains in default (was added when joining)
-3. Shared library transitions to personal (member_count 2→1) → all media must be in default
+1. Upload or explicit add to any library → appears in default
+2. Join shared library with many media → default does NOT change; user can still browse shared library
+3. Leave shared library → default unchanged
 4. Remove from default with media in 3 personal libs and 2 shared libs → removed from 3 personal, remains in 2 shared
 5. Attempt to add member to default library → rejected at API level
 6. Attempt to rename default library → rejected at API level
 
 **Product Consequence:**
-- There is no "keep this only in my special collection but not in default" state
-- Default library is "everything I've ever seen" minus "things I explicitly removed from all my personal contexts"
-- This is complex and potentially confusing; UI must make cascade behavior extremely clear
+- Default library reflects what you explicitly add or upload. Shared library membership alone does not change default contents.
+- Users can browse large shared libraries without consuming default-library quota unless they explicitly add items to their own collections.
 
 ### 4.3 Billing & Account Limits
 
@@ -430,32 +428,29 @@ When user removes media M from default library:
 **Free Tier:**
 - Up to 5 media in default library
 - Unlimited library creation (but constrained by media limit)
-- LLM: 0 messages per day
+- LLM: 10 messages per day
 - All core features available
 
 **Personal Plan ($10/month):**
 - Unlimited media in default library
 - Unlimited library creation
-- LLM: 100 messages per day (v1 trial value, subject to adjustment based on costs)
+- LLM: 50 messages per day
 - All core features available
 
-**Pro Plan ($20/month):**
-- Unlimited media
-- Unlimited libraries
-- LLM: unlimited usage (with soft rate limiting for abuse prevention)
-- Priority processing for ingestion
+**Pro Plan:** deferred; may introduce later (candidate limit 100/day) but not part of v1 checkout.
 
 **Note:** Specific tier limits and pricing are v1 trial values and will be adjusted based on actual costs, usage patterns, and market feedback.
 
 **Limit Enforcement:**
 - Free tier: attempting to add 6th media to default library prompts upgrade flow
 - Free tier: attempting to send 11th LLM message in a day prompts upgrade flow or wait-until-tomorrow message
-- Limits apply at default library level, not per individual library (since all media must be in default)
+- Personal tier: attempting to send 51st LLM message in a day prompts wait-until-tomorrow
+- Limits apply at default library level for explicitly added/uploaded media; shared membership alone does not count.
 
 **Billing Integration:**
 - Stripe for payment processing
 - Subscription management in Account pane
-- Grace period: 7 days after payment failure before downgrade enforcement
+- Entitlements: only `active` status yields paid tier; any non-active status downgrades immediately (no grace in v1)
 - Downgrade behavior: user cannot add new media until under limit; existing media remains readable
 
 **LLM Usage Accounting:**

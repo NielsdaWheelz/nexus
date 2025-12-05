@@ -12,17 +12,17 @@ This document is the single source of truth for the Nexus domain model. It defin
 
 - Represents an authenticated user of the system.
 - Essential attributes: id, email, display_name, subscription_tier, stripe_customer_id, created_at, updated_at.
-- subscription_tier enum: `free`, `personal`, `pro`.
+- subscription_tier enum: `free`, `personal` (pro deferred to future).
 - stripe_customer_id: nullable; populated when user creates Stripe customer record.
 
 ### Subscription
 
 - Represents a user's subscription state and Stripe billing details.
 - Essential attributes: id, user_id, stripe_subscription_id, stripe_price_id, status, current_period_start, current_period_end, cancel_at_period_end, created_at, updated_at.
-- status enum: `active`, `past_due`, `canceled`, `unpaid`, `incomplete`.
+- status enum (simplified v1): `active`, `past_due`, `unpaid`, `incomplete`, `canceled` (any non-active is treated as not-paid for entitlements).
 - stripe_subscription_id: Stripe's subscription object ID.
-- stripe_price_id: Stripe's price ID (identifies tier: personal or pro).
-- Constraint: One active subscription per user (if any).
+- stripe_price_id: Stripe's price ID (identifies tier: personal; pro reserved for future).
+- Constraint: At most one active-ish subscription per user (statuses in {active, past_due, unpaid, incomplete}); historical rows allowed; free users may have zero subscriptions.
 
 ### UsageRecord
 
@@ -207,10 +207,10 @@ A user may see a social object if and only if:
 
 ### Subscription Invariants
 
-- A user can have at most one active subscription at any time.
-- Free tier users have no subscription record.
+- A user can have at most one active-ish subscription (statuses in {active, past_due, unpaid, incomplete}) at any time.
+- Free tier users may have zero subscriptions; if a subscription exists and is not active, the tier must be free.
 - Subscription status synchronizes with Stripe webhooks.
-- When subscription status transitions to 'canceled' or 'unpaid', user.subscription_tier may be downgraded after grace period (7 days).
+- Entitlements: only `active` yields paid tier; all other statuses map to free immediately (no grace in v1).
 - Downgrade enforcement: user cannot add new media to default library if over tier limit; existing media remains readable.
 
 ### Usage Invariants
@@ -218,10 +218,10 @@ A user may see a social object if and only if:
 - UsageRecords track daily LLM message counts for quota enforcement.
 - message_count increments only for user messages, not assistant responses.
 - Daily reset at midnight UTC (new date → new UsageRecord).
-- Quota enforcement:
-  - Free tier: 0 messages per day
-  - Personal tier: 100 messages per day
-  - Pro tier: unlimited (soft rate limiting for abuse prevention)
+- Quota enforcement (v1):
+  - Free tier: 10 messages per day
+  - Personal tier: 50 messages per day
+  - Pro tier: 100 messages per day (pro deferred; treat as future extension)
 - Exceeding quota prompts upgrade flow or "wait until tomorrow" message.
 
 ### Library Invariants
@@ -231,8 +231,8 @@ A user may see a social object if and only if:
 - Owner cannot leave the library without transferring ownership or deleting it. Default libraries cannot be deleted and ownership cannot be transferred.
 - Default libraries must have exactly one LibraryUser row (the owner). Default libraries are never shareable; attempts to add other users as members must be rejected at the API level.
 - Default libraries may be renamed; rename is admin-only (owner).
-- Default library is always of "personal" semantics; all personal media must be present there.
-- When a user adds media M to any library they are a member of, M is automatically added to their default library.
+- Default library holds media the user explicitly adds or uploads; joining a shared library does NOT auto-import that library’s media into the user’s default.
+- When a user explicitly adds media M to any library they are a member of (including uploads they initiate), M is automatically added to their default library.
 - Removing media from default library removes it from all unshared libraries owned by that user (member_count == 1).
 
 ### Media Invariants
@@ -260,9 +260,9 @@ A user may see a social object if and only if:
 - **Tier limits on media count in default library (enforced by quota/billing subsystem, not ingestion):**
   - Free tier: maximum 5 media in default library
   - Personal tier: unlimited media
-  - Pro tier: unlimited media
+  - Pro tier: unlimited media (pro deferred; treated as future extension)
 - Attempting to add media beyond tier limit prompts upgrade flow
-- Limits apply at default library level (all media must be in default library per existing invariants)
+- Limits apply at default library level (explicitly added/uploaded media only; shared-library membership alone does not auto-add)
 
 ### Chunk Invariants
 
@@ -378,40 +378,38 @@ Retry behavior:
 ### Subscription Lifecycle
 
 ```
-                    ┌────────────┐
-            ┌──────▶│   active   │◀──────┐
-            │       └────────────┘       │
-            │              │             │
-            │              │             │
-            │              ▼             │
-   ┌────────────┐   ┌────────────┐   ┌──────────┐
-   │ incomplete │   │  past_due  │──▶│  unpaid  │
-   └────────────┘   └────────────┘   └──────────┘
-                           │                │
-                           ▼                ▼
-                    ┌────────────┐   ┌──────────┐
-                    │  canceled  │◀──│ (7 days) │
-                    └────────────┘   └──────────┘
+        ┌────────────┐
+        │   active   │
+        └──────┬─────┘
+               │
+               ▼
+┌────────────┬────────────┬───────────┐
+│ incomplete │  past_due  │  unpaid   │
+└────────────┴────────────┴───────────┘
+               │
+               ▼
+          ┌────────────┐
+          │  canceled  │
+          └────────────┘
 ```
 
-- **active**: Subscription is current; user has full tier access.
-- **incomplete**: Initial payment incomplete (new subscription not yet activated).
-- **past_due**: Payment failed; retrying. User retains access during retry period.
-- **unpaid**: Payment failed after retries. Grace period starts (7 days).
-- **canceled**: User canceled or payment failed after grace period. Downgrade to free tier.
+- **active**: Subscription is current; user has full paid tier access.
+- **incomplete**: Initial payment incomplete (new subscription not yet activated). Entitlement = free.
+- **past_due**: Payment failed; retrying. Entitlement = free.
+- **unpaid**: Payment failed after retries. Entitlement = free.
+- **canceled**: User canceled or payment failed. Entitlement = free.
 
 State transitions:
-- User subscribes → `incomplete` (if payment pending) or `active` (if payment succeeds immediately)
-- Payment succeeds → `active`
-- Payment fails → `past_due`
-- Retry fails → `unpaid` (grace period starts)
-- After 7 days in `unpaid` → `canceled`, user.subscription_tier downgraded
-- User cancels → `canceled` at period end (if cancel_at_period_end = true)
+- User subscribes → `incomplete` (if payment pending) or `active` (if payment succeeds immediately).
+- Payment succeeds → `active`.
+- Payment fails → `past_due`; further failure → `unpaid`; cancellation webhook → `canceled`.
+- Any non-`active` status maps entitlements to free immediately (no grace).
+- User cancels → `canceled` (period-end handling may exist in Stripe but entitlements become free on non-active).
 
 Stripe webhook synchronization:
 - Subscription status changes are pushed via Stripe webhooks
 - Webhooks update subscription.status and user.subscription_tier
-- System enforces tier limits based on user.subscription_tier, not subscription.status directly
+- System enforces tier limits based on user.subscription_tier (which is derived from status)
 
 ---
 
