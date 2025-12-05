@@ -203,17 +203,17 @@ For PDFs without text layers (scanned/image-only), ingestion produces `plain_tex
 
 **Acceptance Criteria:**
 - Users start with one default library (auto-created on signup)
-- Default library MUST NOT be deleted, shared, or renamed
+- Default library MUST NOT be deleted or shared; rename is allowed (owner/admin only)
 - Users can create additional libraries
 - Library owners can invite members (as `member` or `admin`)
-- Only owners/admins can add/remove media and manage members
+- Admins (owner or promoted admins) can add/remove media and manage members/roles
 - Removing last member (other than owner) makes library unshared
 - Default library MUST NOT have members added (API-level enforcement)
 
 **Constraints (from domain model):**
 - Each user has exactly one `is_default = true` library
 - Default libraries have exactly one LibraryUser row (the owner)
-- Default libraries cannot be renamed
+- Default libraries may be renamed (admin-only)
 - Owner MUST always be a member with role `admin`
 - Owner cannot leave library without transferring ownership or deleting it
 - Library is "shared" iff LibraryUser count > 1
@@ -226,7 +226,6 @@ For PDFs without text layers (scanned/image-only), ingestion produces `plain_tex
 
 **Failure Conditions:**
 - Attempt to share default library → reject with message
-- Attempt to rename default library → reject with message
 - Attempt to delete default library → reject with message
 - Attempt to leave owned library → reject (must transfer ownership or delete)
 

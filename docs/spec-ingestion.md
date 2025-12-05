@@ -45,7 +45,7 @@ This subsystem handles all media ingestion, processing, storage, and lifecycle m
 - HTTP client for URL fetching (timeout: 10s, max redirects: 5)
 - Text extraction interface (implementation-agnostic; must be deterministic; requires separate alignment spec - see §11)
 - Chunking interface (implementation-agnostic; strategies configured externally)
-- Embedding API interface (implementation-agnostic; dimension count configured externally)
+- Embedding API interface (v1 pinned: OpenAI `text-embedding-3-small`, 1536d default; embedding dimension is configurable via environment but MUST default to 1536)
 - pgvector extension for embedding storage and ANN indexing
 
 **CRITICAL ARCHITECTURAL WARNING:**
@@ -139,8 +139,19 @@ This subsystem MUST:
   - Media transitions to `ready_for_reading` (user can view PDF visually)
   - Chunking/embedding jobs are NOT enqueued (no text to process)
   - Media never transitions to `indexed`
-  - Search behavior (semantic and keyword) is undefined for such media (search subsystem responsibility)
-  - Highlight/annotation behavior for such media is out of scope for ingestion (reader subsystem responsibility)
+  - Search behavior (semantic and keyword) is disabled for such media in v1
+  - Highlight/annotation behavior for such media is disabled in v1 (reader subsystem enforces)
+
+### Extraction alignment (v1 pinned)
+- **HTML/EPUB traversal:** Use a DOM TreeWalker over text nodes in document order on the sanitized reading DOM. Block-level breaks emit exactly one `\n`; inline nodes concatenate directly. Decode entities; normalize NBSP to space; strip zero-width chars; collapse runs of whitespace to single spaces except inside pre/code which are preserved by the sanitizer. The frontend MUST use the same traversal; `plain_text` length must match the frontend traversal length byte-for-byte.
+- **EPUB spine:** Traverse spine items in spine order; within each item use the same DOM traversal rules as HTML. No additional whitespace inserted between spine items beyond a single `\n`.
+- **PDF:** Traverse the pdf.js text layer items in page order, top-to-bottom, left-to-right; join items with spaces as emitted by pdf.js and insert `\n` between lines/paragraphs exactly as provided by the text layer. No coordinate-based reordering. If the text layer is empty, `plain_text = ''`.
+- **Fixtures:** Maintain golden fixtures per kind (HTML, EPUB, PDF) asserting `plain_text`, checksum, and length. Any parser/library upgrade must pass these fixtures.
+
+### Extraction libraries (v1 pinned)
+- **HTML:** `jsdom` + `@mozilla/readability`, pinned versions in lockfile, deterministic selector set for metadata (authors/dates). No floating upgrades.
+- **EPUB:** Deterministic spine walker using the same DOM traversal rules as HTML; use a pinned EPUB parser (e.g., `epubjs` core) with sanitized DOM output fed through readability-style cleaning if available; no LLMs.
+- **PDF:** Primary structured parser (pdf-parse-equivalent) pinned; fallback to `pdf.js` text layer traversal with pinned version. Whitespace normalization per traversal rules above. No OCR in v1.
 
 This subsystem MUST NOT:
 
@@ -212,7 +223,7 @@ All endpoints require authentication. `user_id` is extracted from session/JWT.
 
 **Behavior:**
 1. Validate `url` format and `kind` enum (if provided).
-2. Check user's tier limit by calling quota/billing subsystem: if limit exceeded, return `403 TIER_LIMIT_EXCEEDED`.
+2. Check user's tier limit by calling quota/billing subsystem: if limit exceeded, return `403 TIER_LIMIT_EXCEEDED`. **Fail-open policy:** if quota/billing is unavailable or times out (2s budget), proceed with ingestion, mark the media as `tier_check_deferred=true` in logs/metrics, and enqueue an async reconciliation job; reconciliation MAY later remove LibraryMedia rows and surface a user notice if over limit.
 3. Fetch URL (10s timeout, follow up to 5 redirects, capture Content-Type header).
 4. Canonicalize final redirected URL (lowercase scheme/host, sort query params, strip fragment, strip tracking params) and store as `canonical_url`.
 5. Infer `kind` if not provided:
@@ -245,6 +256,11 @@ All endpoints require authentication. `user_id` is extracted from session/JWT.
 - First upload of content is canonical; subsequent uploads of identical content reuse existing `media_id`
 - v1 does not support re-ingestion or content updates; if source content changes, users must manually remove and re-upload
 - Canonicalization of URL (for storage): lowercase scheme/host, sort query params, strip fragment, strip tracking params (`utm_*`, `fbclid`, `gclid`, `_ga`, `ref`, `source`)
+
+**URL content persistence (v1 decision):**
+- Fetched URL bytes are **not** persisted in object storage in v1 (HTML and PDF fetched via URL are streamed for hashing and extraction only).
+- To preserve auditability, logs MUST capture: requested URL, final redirected URL, request/response headers (size-bounded), HTTP status, content length, SHA-256 hash, and timing. These logs plus content_hash are the only provenance for fetched content.
+- Consequence: re-extraction cannot be performed without re-fetching the source; if the source changes or disappears, results are not reproducible. This is an accepted trade-off for cost/simplicity in v1.
 
 **Concurrency:**
 - Content hash deduplication is enforced by database unique constraint on `media(content_hash)`
@@ -295,7 +311,7 @@ All endpoints require authentication. `user_id` is extracted from session/JWT.
 1. Validate `kind` enum (`epub` or `pdf`).
 2. Validate file size: PDF ≤ 50 MB, EPUB ≤ 25 MB.
 3. Validate file MIME type matches `kind` (magic bytes check: PDF = `%PDF`, EPUB = ZIP with `mimetype` entry).
-4. Check user's tier limit by calling quota/billing subsystem: if limit exceeded, return `403 TIER_LIMIT_EXCEEDED`.
+4. Check user's tier limit by calling quota/billing subsystem: if limit exceeded, return `403 TIER_LIMIT_EXCEEDED`. **Fail-open policy:** if quota/billing is unavailable or times out (2s budget), proceed with ingestion, mark the media as `tier_check_deferred=true` in logs/metrics, and enqueue an async reconciliation job; reconciliation MAY later remove LibraryMedia rows and surface a user notice if over limit.
 5. Compute content hash (SHA-256 of file bytes).
 6. Attempt to insert `Media` row with `INSERT ... ON CONFLICT (content_hash) DO NOTHING RETURNING id`:
    - If row returned: new media created, proceed to step 8.
@@ -657,7 +673,7 @@ All jobs are Celery tasks with two distinct failure modes and retry behaviors:
 4. Retrieve `plain_text` (immutable after this point).
 5. Dispatch to chunking interface: `chunk_text(plain_text, strategy_config) -> List[Chunk]`
    - Interface returns list of chunks with `sequence_index` (0-indexed, sequential, gap-free)
-   - Strategy identifier is stored in `chunking_strategy` column (v1 default: `recursive_character`)
+   - Strategy identifier is stored in `chunking_strategy` column (v1 pinned default: `recursive_character` with `max_chunk_size=1000` characters and `chunk_overlap=200` characters; configurable via env but defaults MUST be as stated)
 6. Within a transaction:
    - Delete existing chunks for `(media_id, chunking_strategy)` (ensures atomicity on re-run).
    - Insert all new chunk rows: `media_id`, `chunking_strategy`, `sequence_index`, `content`, `embedding = NULL`.
@@ -707,7 +723,7 @@ All jobs are Celery tasks with two distinct failure modes and retry behaviors:
 2. If no chunks found, abort (idempotency guard).
 3. Batch chunks (batch size determined by embedding API rate limits; typically 100-1000).
 4. For each batch:
-   - Call embedding API interface: `generate_embeddings(texts: List[str]) -> List[np.ndarray]`
+   - Call embedding API interface: `generate_embeddings(texts: List[str]) -> List[np.ndarray]` (v1 pinned model: OpenAI `text-embedding-3-small`, 1536d; embedding dimension configurable via env but MUST default to 1536)
    - Within transaction: update `embedding` column for batch (pgvector type).
    - Commit transaction (per-batch commit for progress persistence).
 5. After all chunks for this strategy have embeddings:
@@ -1222,74 +1238,20 @@ GET /api/v1/media?limit=50&offset=50 # Page 2
 
 ---
 
-## 11. Open Questions
+## 11. Decisions (v1 pinned)
 
-### Resolved (v1 decisions committed)
+All formerly open questions are resolved for v1:
 
-1. **Q:** Should PDF uploads store original file in S3?
-   **A:** Yes. `storage_path` stores S3 URI for all uploaded files (EPUB, PDF). HTML fetched from URL is not stored in S3 (can be re-fetched if needed, out of scope for v1).
-
-2. **Q:** Should deduplication prompt user for confirmation?
-   **A:** No. Deduplication is silent and automatic. User is informed via `is_duplicate: true` in response, but no confirmation prompt is shown.
-
-3. **Q:** Should failed media be automatically retried?
-   **A:** No. Automatic retry is not implemented in v1. User must manually trigger retry via `/retry` endpoint. This avoids infinite loops and costly retries for persistently failing content.
-
-4. **Q:** Should chunking strategies be configurable per media?
-   **A:** Deferred to implementation. Chunking strategies are configured externally; ingestion subsystem is strategy-agnostic. Default v1 configuration applies all configured strategies to all media.
-
-5. **Q:** Should `plain_text` be versioned?
-   **A:** No. v1 does not version `plain_text`. Once `ready_for_reading` is reached, `plain_text` is immutable. Re-processing requires deletion and recreation (out of scope for v1).
-
-### Open (require product decision before implementation)
-
-**CRITICAL - MUST RESOLVE BEFORE IMPLEMENTATION BEGINS:**
-
-**Blocking implementation:** Yes
-**Deadline for decision:** Before sprint planning
-**Decision maker:** Product owner
-
-1. **Q:** Text Extraction Alignment Specification
-   **A:** UNRESOLVED. Requires separate specification document defining:
-   - **Who:** Frontend + backend engineers collaborate
-   - **When:** Before extraction algorithm selection
-   - **What:** Document exact traversal rules for each kind:
-     - HTML: depth-first DOM traversal, reading-order heuristics for complex layouts (tables, sidebars, multi-column)
-     - EPUB: spine order + per-chapter DOM traversal rules
-     - PDF: pdf.js text layer extraction order (top-to-bottom, left-to-right per page)
-   - **Validation:** Automated test suite comparing extraction output with frontend highlight offset calculations
-   - **Edge cases:** How to handle embedded objects, footnotes, annotations, multi-column text, RTL languages
-   - **Rationale:** Without alignment spec, highlight offsets will be incorrect and user experience will be broken
-
-2. **Q:** Scanned PDFs - product behavior
-   **A:** UNRESOLVED. This spec defines technical behavior (extraction produces `plain_text = ''`, no chunking/indexing). Product must decide:
-   - v1: View-only, no highlights, no search (strictest; requires reader subsystem to check for empty `plain_text`)
-   - v1: View-only, with placeholder for future OCR (allows highlights after OCR added)
-   - This decision affects reader subsystem spec, not ingestion technical behavior.
-
-**Implementation choices (non-blocking; can be decided during implementation):**
-
-These decisions do not block the spec but must be made before coding begins. They should be documented in a separate `ingestion-implementation.md` file:
-
-3. **Q:** Text extraction libraries
-   - HTML: `jsdom` + `mozilla/readability` (deterministic main-content extraction; no LLM).
-   - EPUB: custom deterministic spine-order extractor (still required).
-   - PDF: primary structured parser (pdf-parse equivalent) with pdf.js text-layer fallback.
-   - **Constraint:** Must be deterministic, must align with highlight traversal order, MUST NOT rely on LLMs.
-   - **Selectors:** Author/date meta selector set MUST be versioned (see §4.2 heuristics) and kept deterministic.
-
-4. **Q:** Chunking strategy
-   - Recommended: `recursive_character` with 1000 char chunks, 200 char overlap
-   - **Constraint:** Must be deterministic
-
-5. **Q:** Embedding model
-   - Recommended: OpenAI `text-embedding-3-small` (1536d)
-   - **Constraint:** Must be deterministic
-
-**Lower priority (can be deferred):**
-
-6. **Q:** Should media support OCR for scanned PDFs?
-   **A:** Out of scope for v1. Scanned PDFs remain at `ready_for_reading` (viewable but not searchable).
+1. **PDF storage:** Uploads (PDF/EPUB) are stored in object storage; fetched HTML/PDF bytes from URLs are not persisted (audit logging only).
+2. **Deduplication UX:** Silent and automatic; response includes `is_duplicate`.
+3. **Auto-retry:** No automatic retry; manual `/retry` only.
+4. **Chunking strategy:** Pinned to `recursive_character` with `max_chunk_size=1000`, `chunk_overlap=200` (configurable via env, defaults fixed).
+5. **Embedding model:** Pinned to OpenAI `text-embedding-3-small`, 1536d default (dimension configurable via env, default fixed).
+6. **Extraction alignment:** Pinned traversal rules and golden fixtures per §3. Deterministic DOM/spine/pdf.js order only.
+7. **Extraction libraries:** Pinned stacks per §3 (jsdom + readability; deterministic EPUB spine walker; structured PDF parser + pdf.js fallback).
+8. **Scanned PDFs:** View-only; `plain_text=''`, no highlights, no search, no chunk/embedding; status `ready_for_reading`. UI may surface an OCR placeholder/CTA for future processing, but v1 does not run OCR.
+9. **Billing coupling:** Fail-open on billing outage (2s budget) with audit flag + async reconciliation; still fail-closed on explicit over-limit.
+10. **Plain text mutability:** Immutable after `ready_for_reading`; no versioning in v1.
 
 ---
 
@@ -1313,17 +1275,6 @@ These decisions do not block the spec but must be made before coding begins. The
 
 ## End of Specification
 
-**Status: DRAFT**
+**Status: IMPLEMENTATION-READY**
 
-This document defines the complete interface contract and invariants for the ingestion subsystem. It is implementation-ready AFTER resolving the four critical open questions in §11:
-1. Text extraction algorithm selection (HTML/EPUB/PDF)
-2. Chunking strategy and parameters
-3. Embedding model selection
-4. Text extraction alignment specification
-
-Until those decisions are made and documented, this spec remains in DRAFT status.
-
-**Post-resolution:**
-- All ambiguities have been resolved
-- Deviations from invariants are forbidden
-- Questions must be escalated to product owner
+All ambiguities captured in §11 are resolved. Deviations from invariants are forbidden; escalate changes to product owner.
