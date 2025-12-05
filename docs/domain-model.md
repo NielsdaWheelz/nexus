@@ -130,6 +130,8 @@ Authors are managed by multiple subsystems with distinct responsibilities:
 ### Highlight
 
 - A text span selection by a user on a media item.
+- Offsets (`start_offset`, `end_offset`) are 0-indexed character positions into `media.plain_text`, the canonical linear text derived deterministically from the processed display DOM (HTML/EPUB) or pdf.js text layer (PDF).
+- Backend stores only canonical offsets; no DOM offsets or PDF coordinates are persisted.
 - Essential attributes: id, user_id, media_id, start_offset, end_offset, quote, prefix, suffix, color, created_at, updated_at.
 - Constraint: (user_id, media_id, start_offset, end_offset) is unique.
 - Overlapping highlights for the same user are allowed.
@@ -269,6 +271,8 @@ A user may see a social object if and only if:
 
 ### Highlight Invariants
 
+- Canonical text: `media.plain_text` is the single source for all offsets; it is deterministic, derived from the processed display DOM (HTML/EPUB) or pdf.js text layer (PDF), and is immutable once processing_status reaches `ready_for_reading`.
+- All highlight offsets index into `media.plain_text` only; backend does not store DOM offsets or PDF coordinates.
 - A user cannot create two highlights with identical (media_id, start_offset, end_offset).
 - Overlapping highlights for the same user are allowed.
 
@@ -276,7 +280,7 @@ A user may see a social object if and only if:
 
 - Highlights can exist without annotations. Annotations can only exist if attached to a highlight.
 - Deleting a highlight deletes its annotation (if one exists).
-- Deleting an annotation deletes the highlight as well (v1 product decision; changed from earlier "annotation-only delete" model).
+- Deleting an annotation leaves the highlight intact.
 - Messages referencing a deleted highlight or annotation are not deleted; their MessageContext rows referencing that target are deleted. UI must handle "this note was deleted" gracefully if needed.
 
 ### Conversation & Message Invariants
