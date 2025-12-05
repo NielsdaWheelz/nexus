@@ -227,10 +227,10 @@ A user may see a social object if and only if:
 ### Library Invariants
 
 - A library is considered shared if and only if it has more than one LibraryUser row.
-- The owner of a library MUST always be a member of that library with role='admin'. An owner who is not a member is not allowed.
+- The owner of a library MUST always be a member of that library with role='admin'. An owner who is not a member is not allowed. Other members may be promoted to admin by existing admins; owner cannot be demoted.
 - Owner cannot leave the library without transferring ownership or deleting it. Default libraries cannot be deleted and ownership cannot be transferred.
 - Default libraries must have exactly one LibraryUser row (the owner). Default libraries are never shareable; attempts to add other users as members must be rejected at the API level.
-- Default libraries cannot be renamed (v1 product constraint).
+- Default libraries may be renamed; rename is admin-only (owner).
 - Default library is always of "personal" semantics; all personal media must be present there.
 - When a user adds media M to any library they are a member of, M is automatically added to their default library.
 - Removing media from default library removes it from all unshared libraries owned by that user (member_count == 1).

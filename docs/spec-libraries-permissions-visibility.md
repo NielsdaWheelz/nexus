@@ -36,14 +36,14 @@ The updated invariants provided in this spec resolve the following conflicts wit
    - **Updated invariant (this spec):** Owner **must** always be a member and an admin; owner cannot leave or demote themselves. Permissions are derived from LibraryUser rows, and owner_user_id exists only alongside membership.
    - **Rationale:** Keeps a single accountable admin per library in v1 and avoids zero-admin libraries.
 
-2. **Default library renaming (RESOLVED CONFLICT):**
+2. **Default library renaming (UPDATED):**
    - **Domain model stated:** "Default libraries cannot be renamed (v1 product constraint)."
    - **PRD stated:** Same.
-   - **Updated invariant (this spec):** Default library name is fixed in v1 (no rename). This spec adopts the stricter rule unless product explicitly decides to allow rename during implementation.
+   - **Updated invariant (this spec):** Default libraries may be renamed in v1 (name constraints still apply). This supersedes earlier prohibitions.
 
-3. **Removing media from default library (CLARIFIED):**
+3. **Removing media from default library (UPDATED):**
    - **Domain model stated:** "Removing media from default library removes it from all unshared libraries owned by that user (member_count == 1)."
-   - **Updated invariant (this spec):** v1 does **not** cascade removal beyond the default library. Cascade behavior is deferred to a later version.
+   - **Updated invariant (this spec):** Cascade is enforced: removing from default also removes from the owner's personal (sole-member) libraries.
 
 **This spec proceeds with the updated invariants listed above. All conflicts are resolved in favor of the updated rules.**
 
@@ -63,7 +63,7 @@ The updated invariants provided in this spec resolve the following conflicts wit
 | Table | Who Can Write | Notes |
 |-------|---------------|-------|
 | `library` | This subsystem only | Full lifecycle ownership: create, rename, delete |
-| `library_user` | This subsystem only | Full lifecycle ownership: add/remove members (no role changes in v1) |
+| `library_user` | This subsystem only | Full lifecycle ownership: add/remove members and manage roles |
 | `library_media` | This subsystem + Ingestion subsystem | Ingestion: inserts default library rows. This subsystem: full lifecycle (add/remove media from any library). Both share write access. |
 | `media` | Ingestion subsystem only | This subsystem never writes to media table |
 
@@ -82,20 +82,19 @@ This subsystem MUST:
    - Ensure default library is never deleted
    - Ensure default library never has more than one LibraryUser row
    - Reject all attempts to add members to default library
-   - Reject all attempts to rename default library (v1 constraint, unless product explicitly allows)
    - Reject all attempts to delete default library
 
 2. **Non-default library lifecycle:**
    - Create libraries with (name, owner_user_id, is_default=false)
-   - Rename libraries (only if admin, only if not default)
+   - Rename libraries (admin-only; default and non-default allowed)
    - Delete libraries (only if admin, only if not default, with member/media cleanup)
    - Track ownership via owner_user_id (immutable field); owner remains a member/admin for the life of the library
 
 3. **Membership management (LibraryUser):**
-   - Add members to libraries (role is `member`; owner is the only `admin` in v1)
+   - Add members to libraries (default role = `member`; admins may promote/demote members to/from `admin`)
    - Remove members from libraries (but never the owner)
-   - No role changes in v1 (PATCH members is out of scope)
-   - Enforce constraints: default library has exactly one LibraryUser row (the owner); non-default libraries must always retain the owner as admin and have ≥1 member
+   - Role changes are in scope: admin-only promotion/demotion; owner remains admin and cannot be demoted
+   - Enforce constraints: default library has exactly one LibraryUser row (the owner); non-default libraries must always retain at least one admin (owner counts) and have ≥1 member
    - Enforce constraint: (library_id, user_id) unique
 
 4. **Media-library associations (LibraryMedia):**
@@ -106,6 +105,7 @@ This subsystem MUST:
      - When a user joins library L, add all existing media in L to their default library
      - When M is removed from U's default library D, also remove M from libraries where U is the sole member (personal libraries only)
    - Enforce constraint: (library_id, media_id) unique
+   - Coupling writes must be atomic (single transaction, all-or-nothing) with retry on serialization failure.
 
 5. **Visibility rule enforcement (authoritative specification):**
    - Define the formal visibility rule for social objects
@@ -279,7 +279,7 @@ All endpoints require authentication. `current_user_id` is extracted from sessio
 
 #### PATCH /api/v1/libraries/{id}
 
-**Purpose:** Rename a library (admin-only, non-default only).
+**Purpose:** Rename a library (admin-only, default and non-default).
 
 **Path Parameters:**
 - `id` (required, UUID): Library ID.
@@ -309,7 +309,6 @@ All endpoints require authentication. `current_user_id` is extracted from sessio
 
 **Error Codes:**
 - `400 INVALID_NAME`: Name is empty or exceeds max length.
-- `400 CANNOT_RENAME_DEFAULT_LIBRARY`: Attempting to rename default library (forbidden in v1).
 - `403 INSUFFICIENT_PERMISSIONS`: Current user is not admin.
 - `404 LIBRARY_NOT_FOUND`: Library ID does not exist OR current user is not a member.
 - `500 INTERNAL_ERROR`: Database error.
@@ -319,13 +318,8 @@ All endpoints require authentication. `current_user_id` is extracted from sessio
 2. Query `LibraryUser` by `library_id` and `user_id=current_user_id`.
 3. If no row found: return `404 LIBRARY_NOT_FOUND`.
 4. If `role != 'admin'`: return `403 INSUFFICIENT_PERMISSIONS`.
-5. Query `Library` by `id`.
-6. If `is_default = true`: return `400 CANNOT_RENAME_DEFAULT_LIBRARY`.
-7. Update `Library` set `name`, `updated_at=now()`.
-8. Return `200` with updated library object.
-
-**Note:**
-- v1 constraint: default libraries cannot be renamed. If product explicitly allows this, remove the is_default check.
+5. Update `Library` set `name`, `updated_at=now()`.
+6. Return `200` with updated library object.
 
 ---
 
@@ -440,7 +434,7 @@ All endpoints require authentication. `current_user_id` is extracted from sessio
 
 **Fields:**
 - `user_id` (required, UUID): User ID to add.
-- `role` (ignored in v1; new members are created as role='member' and owner is the only admin).
+- `role` (optional, enum `member`|`admin`; default `member`. Only admins may set `admin`.)
 
 **Response (201 Created):**
 ```json
@@ -468,7 +462,7 @@ All endpoints require authentication. `current_user_id` is extracted from sessio
 4. Query `Library` by `id`.
 5. If `is_default = true`: return `400 CANNOT_ADD_MEMBER_TO_DEFAULT_LIBRARY`.
 6. Query `User` by `user_id` to verify existence. If not found: return `404 USER_NOT_FOUND`.
-7. Attempt to insert `LibraryUser` row: `library_id`, `user_id`, `role='member'`.
+7. Attempt to insert `LibraryUser` row: `library_id`, `user_id`, `role` (default `member`). If requested role=`admin`, caller must be admin; owner remains admin regardless.
 8. If unique constraint violation (user already member): return `400 USER_ALREADY_MEMBER`.
 9. **Trigger default library coupling:**
    - Query all media in library L: `SELECT media_id FROM library_media WHERE library_id = L`.
@@ -515,7 +509,7 @@ All endpoints require authentication. `current_user_id` is extracted from sessio
 6. If `user_id != current_user_id` (removing someone else) AND current user's `role != 'admin'`: return `403 INSUFFICIENT_PERMISSIONS`.
 7. Query `LibraryUser` by `library_id` and `user_id` (target user).
 8. If no row found: return `404 MEMBER_NOT_FOUND`.
-9. **Enforce at least one admin:** If target user is the only admin (owner), reject removal.
+9. **Enforce at least one admin:** If target user is the last admin (including owner), reject removal.
 10. Within transaction:
     a. Delete `LibraryUser` row for `library_id` and `user_id`.
     b. Commit transaction.
@@ -526,6 +520,47 @@ All endpoints require authentication. `current_user_id` is extracted from sessio
 - Removed member loses access to library (visibility may change).
 - Removed member's highlights/annotations on media in this library become invisible to remaining members (unless shared via another library).
 - Library must still have the owner/admin after removal; never remove or demote owner.
+- Media already in the removed member's default library remains there (global media is still readable); only social visibility is lost.
+
+---
+
+#### PATCH /api/v1/libraries/{id}/members/{user_id}
+
+**Purpose:** Change a member's role (admin-only; cannot demote owner; must preserve at least one admin).
+
+**Request:**
+```json
+{
+  "role": "admin"
+}
+```
+
+**Fields:**
+- `role` (required, enum `member`|`admin`)
+
+**Error Codes:**
+- `400 INVALID_ROLE`: Role is not `member` or `admin`.
+- `400 CANNOT_MODIFY_DEFAULT_LIBRARY`: Attempting to change membership of default library (default remains single-member).
+- `400 CANNOT_DEMOTE_OWNER`: Attempting to change owner role (owner stays admin).
+- `400 MUST_RETAIN_ADMIN`: Operation would leave library with zero admins.
+- `403 INSUFFICIENT_PERMISSIONS`: Current user is not admin.
+- `404 LIBRARY_NOT_FOUND`: Library ID does not exist OR current user is not a member.
+- `404 MEMBER_NOT_FOUND`: Target user_id is not a member of this library.
+- `500 INTERNAL_ERROR`: Database error.
+
+**Behavior:**
+1. Validate `role`.
+2. Query `LibraryUser` for current user; if missing → `404 LIBRARY_NOT_FOUND`.
+3. If caller role != admin → `403 INSUFFICIENT_PERMISSIONS`.
+4. Query `Library`; if default → `400 CANNOT_MODIFY_DEFAULT_LIBRARY`.
+5. Query target membership; if missing → `404 MEMBER_NOT_FOUND`.
+6. If target is owner → `400 CANNOT_DEMOTE_OWNER`.
+7. If setting role=`member`, ensure at least one other admin remains (including owner) else `400 MUST_RETAIN_ADMIN`.
+8. Update role; return `200` with updated member payload.
+9. Emit log: `{"event": "member_role_changed", "library_id": "...", "user_id": "...", "role": "...", "changed_by_user_id": "..."}`.
+
+**Consequences:**
+- Multiple admins supported; promotions/demotions are explicit and admin-gated.
 
 ---
 
@@ -963,7 +998,7 @@ This subsystem does not require background jobs in v1. All operations are synchr
    - Default library CANNOT be deleted by anyone, ever.
    - Default library CANNOT be shared (adding members is forbidden).
    - Default library MUST have exactly one LibraryUser row (the owner with role='admin').
-   - Default library name is fixed in v1 (rename is forbidden unless product explicitly allows).
+   - Default library name MAY be changed (admin-only rename allowed).
 
 3. **Owner field semantics:**
    - `library.owner_user_id` is immutable metadata in v1; ownership transfer is out of scope.
@@ -981,7 +1016,7 @@ This subsystem does not require background jobs in v1. All operations are synchr
 6. **Non-default libraries:**
    - Can be created, renamed, deleted (by admin).
    - Must have at least one member at all times (owner enforces floor).
-   - Owner is the canonical admin; other members are `member` in v1 (no role changes).
+   - Must always retain at least one admin (owner counts); other members may be promoted to admin by existing admins.
 
 ---
 
@@ -997,14 +1032,13 @@ This subsystem does not require background jobs in v1. All operations are synchr
 3. **Non-default library membership:**
    - Library MUST always have at least one member.
    - Owner MUST always be a member and remain `admin` (cannot leave, cannot demote).
-   - At least one admin MUST exist at all times (owner satisfies this).
-   - Other members are `member` in v1; role changes are out of scope.
+   - At least one admin MUST exist at all times (owner satisfies floor; other admins allowed).
+   - Other members may be promoted/demoted by admins; role changes are in scope.
 
 4. **Role constraints:**
-   - Role enum remains `member` or `admin` (owner is the only admin in v1).
-   - Admins can: rename library, add/remove media, invite/remove members.
+   - Role enum remains `member` or `admin`; multiple admins allowed.
+   - Admins can: rename library, add/remove media, invite/remove members, promote/demote roles.
    - Members can: read all media, create own highlights/annotations (creation handled by other subsystems).
-   - Role changes (promote/demote) are not supported in v1.
    - Owner is always an admin; demoting owner is forbidden.
 
 5. **Permission derivation:**
@@ -1075,6 +1109,7 @@ can_see(V, S) ⟺ (V = O) ∨ ( libraries(V, M) ∩ libraries(O, M) ≠ ∅ )
 4. **Search enforcement:** If user B can see X (highlight / annotation / message / conversation), then:
    - X MUST be included in search results when filters allow it.
    - Search MUST NEVER return X to a user who cannot see it according to the rule above.
+   - Visibility checks MUST be enforced via database joins per request (no stale caches or client-side filtering).
 
 5. **Schema constraint:** Do NOT introduce per-library "copy" of highlights / annotations / messages. They stay globally stored and only filtered by visibility. LibraryMedia remains the pivot; we do NOT add library_id to highlight / annotation / message tables.
 
@@ -1104,11 +1139,13 @@ can_see(V, S) ⟺ (V = O) ∨ ( libraries(V, M) ∩ libraries(O, M) ≠ ∅ )
 |--------------------------------------|-------------|-------------------------------------------------------|--------------------------------------|
 | `INVALID_NAME`                       | 400         | Library name is empty or exceeds max length (200 chars) | Provide valid name                   |
 | `INVALID_ROLE`                       | 400         | Role is not `member` or `admin`                       | Use valid role                       |
-| `CANNOT_RENAME_DEFAULT_LIBRARY`      | 400         | Attempting to rename default library (forbidden)      | Cannot rename default library        |
 | `CANNOT_DELETE_DEFAULT_LIBRARY`      | 400         | Attempting to delete default library (forbidden)      | Cannot delete default library        |
 | `CANNOT_ADD_MEMBER_TO_DEFAULT_LIBRARY` | 400       | Attempting to add member to default library (forbidden) | Cannot share default library       |
 | `CANNOT_REMOVE_FROM_DEFAULT_LIBRARY` | 400         | Attempting to remove member from default library (forbidden) | Cannot remove from default library |
 | `CANNOT_REMOVE_OWNER`                | 400         | Attempting to remove library owner (forbidden)        | Owner cannot be removed              |
+| `CANNOT_MODIFY_DEFAULT_LIBRARY`      | 400         | Attempting to change roles in default library (forbidden) | Default stays single-member          |
+| `CANNOT_DEMOTE_OWNER`                | 400         | Attempting to demote owner from admin                 | Owner remains admin                  |
+| `MUST_RETAIN_ADMIN`                  | 400         | Operation would leave library with zero admins        | Promote another admin first          |
 | `USER_ALREADY_MEMBER`                | 400         | User is already a member of this library              | User is already a member             |
 | `MEDIA_ALREADY_IN_LIBRARY`           | 400         | Media is already in this library                      | Media already exists in library      |
 | `INSUFFICIENT_PERMISSIONS`           | 403         | Current user is not admin                             | Must be admin to perform operation   |
@@ -1182,7 +1219,7 @@ Minimal logging for v1:
    **A:** NO. Owner must remain a member/admin; owner cannot leave or demote.
 
 2. **Q:** Can default library be renamed?
-   **A:** NO (v1 constraint). Default library name is fixed in v1. If product explicitly decides to allow rename during implementation, remove the is_default check in PATCH /libraries/{id}.
+   **A:** YES. Rename is allowed (admin-only), even for default library.
 
 3. **Q:** How do we handle removing media from default library?
    **A:** Remove from default library and from all of the owner's personal (sole-member) libraries.
