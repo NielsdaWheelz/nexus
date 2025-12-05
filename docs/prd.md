@@ -79,6 +79,29 @@ A group of 2-30 users who read and discuss content together (e.g., book clubs, r
 - UI MUST indicate current indexing state: "Reading ready, indexing..." or "Fully indexed"
 - Failed ingestion displays `failure_reason` to user
 - User can retry failed ingestion
+- For web/EPUB content, Nexus automatically attempts to extract titles and authors from document metadata, so most items require no manual metadata entry
+- For PDFs, title/author extraction is best-effort and may be missing or incorrect in v1
+
+**CRITICAL PRODUCT DECISION: Scanned PDFs (No Text Layer)**
+
+For PDFs without text layers (scanned/image-only), ingestion produces `plain_text = ''` (empty string).
+
+**Technical behavior (defined by ingestion spec):**
+- Media transitions to `ready_for_reading` (user can view visually)
+- No chunking/embedding (no text to process)
+- Media never transitions to `indexed`
+
+**Product decisions (must be implemented by reader/search subsystems):**
+- Reading: Visual rendering supported (user can view PDF)
+- Highlighting: MUST be disabled (no text to anchor to)
+- Search: Semantic search unavailable; keyword search unavailable
+- Future: OCR support deferred to v2+
+
+**User experience:**
+- Clear indicator that "this PDF is view-only (no text layer)"
+- Upload succeeds (not rejected)
+- User can view but cannot highlight or search within document
+- Suggest re-uploading with OCR-processed version if user needs highlighting/search
 
 **Constraints (from domain model):**
 - Media kinds: `html`, `epub`, `pdf` only
@@ -87,6 +110,8 @@ A group of 2-30 users who read and discuss content together (e.g., book clubs, r
 - Failure can occur at any stage: `processing` → `failed` or `ready_for_reading` → `failed`
 - Retries reset status to `pending` and delete partial chunks/embeddings
 - Media added to any library is auto-added to default library
+- Deduplication is content-based (content_hash), not URL-based; first upload is canonical
+- v1 does not support content updates or re-ingestion
 
 **Visible States:**
 - Pending: "Queued for processing..." indicator
@@ -109,7 +134,9 @@ A group of 2-30 users who read and discuss content together (e.g., book clubs, r
 
 **Flow:**
 1. User opens media from library
-2. Reader renders content
+2. Reader renders content:
+   - For web/EPUB: clean, distraction-free reading view (no ads, navigation chrome, or sidebars)
+   - For PDF: visual rendering via PDF viewer
 3. User selects text to create highlight
 4. System captures: start_offset, end_offset, quote, prefix, suffix
 5. User optionally selects highlight color
@@ -118,6 +145,8 @@ A group of 2-30 users who read and discuss content together (e.g., book clubs, r
 8. User can click existing highlight to view/edit/add annotation
 9. User can delete highlight (cascade-deletes annotation if exists)
 10. User can delete annotation (highlight remains)
+
+**Note:** For PDFs without text layers (scanned/image-only), text selection and highlighting MUST be disabled by the reader subsystem. User can view the PDF but cannot interact with text. This is enforced by checking for empty `plain_text` field.
 
 **Acceptance Criteria:**
 - Text selection creates highlight (annotation is optional)
@@ -138,7 +167,8 @@ A group of 2-30 users who read and discuss content together (e.g., book clubs, r
 - Overlapping highlights allowed
 - Highlights can exist without annotations
 - Deleting highlight cascade-deletes annotation (if exists)
-- Deleting annotation leaves highlight intact
+- Deleting annotation also deletes the highlight (v1 product decision; changed from earlier annotation-only delete model)
+- For PDFs with empty `plain_text` (scanned/image-only), highlight creation is disallowed
 
 **Visible States:**
 - Text selected: highlight creation UI appears
@@ -443,7 +473,11 @@ When user removes media M from default library:
 
 - System MUST accept URLs (HTTP/HTTPS) for HTML, EPUB, PDF content
 - System MUST accept file uploads for EPUB and PDF formats
-- Content deduplication is best-effort, primarily content-based (canonical URL is a hint)
+- Content deduplication is strict and content-based (content_hash/SHA-256 of raw bytes)
+- Unique constraint on content_hash enforces strict deduplication (no two rows with identical bytes)
+- canonical_url is metadata only, NOT a deduplication key (different URLs may map to same media; same URL may map to different media if content differs)
+- "No duplicate documents" means "no two rows with identical bytes" (guaranteed), NOT "no conceptually-same content" (best-effort only)
+- First upload of content is canonical; v1 does not support content updates or re-ingestion
 - HTML extraction MUST preserve semantic structure (headings, paragraphs, lists)
 - EPUB extraction MUST handle multi-chapter navigation
 - PDF extraction MUST use backend processing to produce `plain_text`
@@ -487,6 +521,7 @@ When user removes media M from default library:
 - HTML highlighting MUST be non-destructive, supporting overlapping ranges via segmented spans
 - PDF highlighting MUST use overlay technique that does not modify PDF internals
 - Overlapping highlights MUST segment into minimal non-overlapping spans, each annotated with all covering highlight IDs
+- For PDFs with empty `plain_text` (scanned/image-only), text selection and highlighting MUST be disabled
 
 ### 5.4 Highlighting & Annotation Behavior
 
@@ -498,7 +533,7 @@ When user removes media M from default library:
 - Edit highlight: change color
 - Add/edit annotation: create or modify annotation on highlight
 - Delete highlight: MUST cascade-delete annotation (if exists)
-- Delete annotation: highlight remains intact without annotation
+- Delete annotation: MUST also delete the highlight (v1 product decision; changed from earlier annotation-only delete model)
 - Overlapping highlight rendering: segment into minimal spans, apply all covering highlight IDs
 - Others' highlights: distinct visual treatment (attributed, read-only)
 - Highlight export: not in v1 scope
@@ -577,10 +612,29 @@ When user removes media M from default library:
 ### V1 Decisions (Must Resolve Before Implementation)
 
 **Author Capture:**
-- V1: Authors extracted automatically during HTML/EPUB ingestion (from metadata)
-- PDF: no author extraction in v1 (manual entry post-upload)
-- User can edit authors post-ingestion
-- No author disambiguation in v1 (exact string match only)
+
+**CRITICAL CLARIFICATION: Author Data Quality Expectations**
+
+v1 author handling is intentionally minimal and will produce low-quality data. This is accepted technical debt.
+
+**What happens automatically (ingestion subsystem):**
+- HTML/EPUB: Authors extracted from metadata (`<meta name="author">`, `<dc:creator>`)
+- Naive splitting on separators (comma, " and ", " & ")
+- Exact string match deduplication (no normalization)
+- This WILL create garbage entries: "NYTimes Staff", "Unknown", "–", "Smith, John and Jane Doe" (3 authors)
+- PDF: no author extraction in v1 (metadata rarely reliable)
+
+**What users can do (v1):**
+- Manually create new authors via UI (for missing/incorrect metadata)
+- CANNOT edit or delete authors (create-only)
+
+**What's deferred to future metadata subsystem:**
+- Author normalization ("John Smith" vs "J. Smith" are distinct in v1)
+- Author disambiguation (merging, external lookups, LLM-based cleanup)
+- Author editing/deletion
+- Quality cleanup of ingestion-created garbage
+
+**Consequence:** Author table will be messy; accept this for v1. Focus is on "good enough" metadata for reading, not canonical author database.
 
 **Conversation Context Window:**
 - V1: Last 10 messages + selected quote + surrounding 2000 characters from `plain_text` + media metadata
