@@ -9,7 +9,7 @@ This subsystem handles all library management, membership/role management, media
 - Default library creation and enforcement of default library invariants
 - LibraryUser management: membership, roles (owner/admin vs member); promotions/demotions are out of scope in v1
 - LibraryMedia management: adding/removing media to/from libraries
-- Default library coupling: auto-add to default; removing from default cascades to owner's personal libraries
+- Default library coupling: uploader/explicit adder auto-adds to their default; membership changes do not auto-add; removing from default cascades to owner's personal libraries
 - Library state transitions: unshared ↔ shared
 - Visibility rule specification: the authoritative definition of who can see which social objects
 - Permission checks: who can perform library operations (rename, add/remove media, manage members)
@@ -54,7 +54,7 @@ The updated invariants provided in this spec resolve the following conflicts wit
 
 ### Internal Subsystems
 
-- **Ingestion subsystem:** This subsystem creates LibraryMedia rows (default library auto-add). Ingestion owns Media creation; this subsystem owns LibraryMedia lifecycle.
+- **Ingestion subsystem:** This subsystem creates LibraryMedia rows (default library auto-add for uploader). Ingestion owns Media creation; this subsystem owns LibraryMedia lifecycle.
 - **Quota/billing subsystem:** For tier limit checks (if library creation or membership limits are ever enforced; v1: no limits).
 - **Social object subsystems (highlights, annotations, conversations):** These subsystems depend on this spec for their visibility checks. They MUST call visibility rule functions defined here; they MUST NOT implement their own bespoke visibility logic.
 
@@ -101,8 +101,8 @@ This subsystem MUST:
    - Add media to libraries (admin-only operation)
    - Remove media from libraries (admin-only operation)
    - Enforce default library coupling:
-     - When (user U, library L, media M) relation is created, ensure (U.default_library, M) exists
-     - When a user joins library L, add all existing media in L to their default library
+  - When (user U, library L, media M) relation is created because U explicitly adds/uploads, ensure (U.default_library, M) exists
+  - Membership changes do NOT auto-add media into default
      - When M is removed from U's default library D, also remove M from libraries where U is the sole member (personal libraries only)
    - Enforce constraint: (library_id, media_id) unique
    - Coupling writes must be atomic (single transaction, all-or-nothing) with retry on serialization failure.
@@ -120,7 +120,7 @@ This subsystem MUST:
 
 7. **Observability:**
    - Emit structured logs for all library operations
-   - Track metrics: library creation/deletion, membership changes, media add/remove (default auto-add optional)
+   - Track metrics: library creation/deletion, membership changes, media add/remove (include default auto-add for uploader)
 
 This subsystem MUST NOT:
 
@@ -464,17 +464,12 @@ All endpoints require authentication. `current_user_id` is extracted from sessio
 6. Query `User` by `user_id` to verify existence. If not found: return `404 USER_NOT_FOUND`.
 7. Attempt to insert `LibraryUser` row: `library_id`, `user_id`, `role` (default `member`). If requested role=`admin`, caller must be admin; owner remains admin regardless.
 8. If unique constraint violation (user already member): return `400 USER_ALREADY_MEMBER`.
-9. **Trigger default library coupling:**
-   - Query all media in library L: `SELECT media_id FROM library_media WHERE library_id = L`.
-   - For each media M:
-     - Get new member's default library D: `SELECT id FROM library WHERE owner_user_id = user_id AND is_default = true`.
-     - Insert `LibraryMedia(library_id=D, media_id=M)` with `ON CONFLICT DO NOTHING` (idempotent).
-10. Return `201` with member object.
-11. Emit log: `{"event": "member_added", "library_id": "...", "user_id": "...", "role": "member", "added_by_user_id": "..."}`.
+9. Return `201` with member object.
+10. Emit log: `{"event": "member_added", "library_id": "...", "user_id": "...", "role": "member", "added_by_user_id": "..."}`.
 
 **Consequences:**
 - New member can now see all media in library.
-- All media in library are added to new member's default library.
+- No auto-add to default; default contents change only on explicit add/upload by the member.
 - New member can see social objects (highlights, annotations, messages) on shared media from other members.
 
 ---
@@ -658,17 +653,15 @@ All endpoints require authentication. `current_user_id` is extracted from sessio
 4. Query `Media` by `media_id` to verify existence. If not found: return `404 MEDIA_NOT_FOUND`.
 5. Attempt to insert `LibraryMedia` row: `library_id`, `media_id`.
 6. If unique constraint violation (media already in library): return `400 MEDIA_ALREADY_IN_LIBRARY`.
-7. **Trigger default library coupling:**
-   - Query all members of library L: `SELECT user_id FROM library_user WHERE library_id = L`.
-   - For each member U:
-     - Get U's default library D: `SELECT id FROM library WHERE owner_user_id = U AND is_default = true`.
-     - Insert `LibraryMedia(library_id=D, media_id=M)` with `ON CONFLICT DO NOTHING` (idempotent).
+7. **Trigger default library coupling for the actor only:**
+   - Get current user's default library D: `SELECT id FROM library WHERE owner_user_id = current_user_id AND is_default = true`.
+   - Insert `LibraryMedia(library_id=D, media_id=M)` with `ON CONFLICT DO NOTHING` (idempotent).
 8. Return `201` with media object.
 9. Emit log: `{"event": "media_added_to_library", "library_id": "...", "media_id": "...", "added_by_user_id": "...", "member_count": N}`.
 
 **Consequences:**
 - All members of library can now see media.
-- Media is added to all members' default libraries (default library coupling invariant).
+- Media is added to the adding member's default library (not to other members’ defaults).
 - Members can now see each other's social objects (highlights, annotations, messages) on this media (visibility rule).
 
 ---
@@ -910,18 +903,15 @@ This subsystem does not require background jobs in v1. All operations are synchr
 - Trigger: Adding member to library where member_count == 1.
 - Consequences:
   - Library becomes shared.
-  - All media in library are added to new member's default library (default library coupling).
+  - No auto-add to new member's default; they can access media via the shared library.
   - New member can see social objects from existing member on shared media.
 
 **Transition: Shared → Unshared**
 - Trigger: Removing member from library where member_count == 2 (leaving 1 member).
 - Consequences:
   - Library becomes unshared.
-  - All media in library are added to remaining member's default library (default library coupling).
+  - No auto-add to remaining member's default (they already have access via this library).
   - Removed member's social objects become invisible to remaining member (unless shared via another library).
-
-**Critical Invariant:**
-- When library transitions to unshared, all media in library MUST be in remaining member's default library.
 
 ---
 
@@ -1054,11 +1044,10 @@ This subsystem does not require background jobs in v1. All operations are synchr
 2. **Media is global and always readable:** In v1, all authenticated users can read all media (globally readable). Libraries do not hide media; they govern social object visibility and "my collections".
 
 3. **Default library coupling (critical):**
-   - **Invariant 3.1:** When `(user U, library L, media M)` relation is created (LibraryMedia row for (L, M) and U is a member of L via LibraryUser), the system MUST ensure: `(U.default_library_id, M)` exists in LibraryMedia. Create it if missing (idempotent).
-   - **Invariant 3.2 (member joins library):** When user U is added to library L, all media in L MUST be added to U's default library (idempotent).
-   - **Invariant 3.3 (remove from default):** When M is removed from U's default library D, the system MUST also remove M from any library where U is the sole member (personal libraries). Shared libraries are unaffected.
-   - **Simplification:** No shared→unshared auto-add in v1; that behavior is deferred.
-   - **Summary:** Default library is auto-populated with anything the user encounters; removing from default pulls it from the user's personal libraries only.
+   - **Invariant 3.1:** When user U explicitly adds/uploads media M to a library they belong to (creating a LibraryMedia row for (L, M)), ensure `(U.default_library_id, M)` exists. Create it if missing (idempotent).
+   - **Invariant 3.2:** Membership changes (joining/leaving libraries) do NOT auto-add or remove media in default.
+   - **Invariant 3.3:** When M is removed from U's default library D, the system MUST also remove M from any library where U is the sole member (personal libraries). Shared libraries are unaffected.
+   - **Summary:** Default library is populated by the user's explicit adds/uploads; removing from default pulls it from the user's personal libraries only.
 
 4. **LibraryMedia write permissions:**
    - Ingestion subsystem: inserts (default_library, media_id) rows when media is created.
@@ -1194,7 +1183,7 @@ Minimal logging for v1:
   - Default library protection (no share/delete/rename).
   - Membership permissions (admin-only writes).
   - LibraryMedia uniqueness and add/remove behavior.
-  - Default library auto-add on media attachment and member-join.
+- Default library auto-add on explicit media attachment/upload by a user (no auto-add on member-join).
   - Default library removal cascade to owner's personal libraries.
   - Visibility rule intersection cases (shared vs disjoint libraries).
 - Load/SLO testing and exhaustive error-code matrices are deferred.

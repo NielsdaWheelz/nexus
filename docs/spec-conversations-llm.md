@@ -100,7 +100,7 @@ Errors:
 - `400 INVALID_CONTEXT` (bad offsets, empty message, media not ready, plain_text empty)
 - `404 HIGHLIGHT_NOT_FOUND` / `MEDIA_NOT_FOUND`
 - `401 UNAUTHORIZED`
-- `403 LLM_QUOTA_EXCEEDED`
+- `429 LLM_QUOTA_EXCEEDED`
 - `424 LLM_UNAVAILABLE` (provider/transport error)
 - `504 LLM_TIMEOUT`
 - `500 INTERNAL_ERROR`
@@ -116,7 +116,7 @@ Rules:
 - Only owner may send (403 if not).
 - Conversation must exist.
 - Optional single `highlight_id`; if provided, must be owned by caller; contexts attached: highlight + its media (+ annotation if present). If absent, message has zero contexts.
-- Persist user message always. If within quota, increment UsageRecord and call LLM; else skip LLM call and return `LLM_QUOTA_EXCEEDED` with the created user message.
+- Persist user message always. Quota enforcement is delegated to `check_and_maybe_increment_llm_usage` (billing spec); if allowed, increment there and call LLM; else skip LLM call and return `LLM_QUOTA_EXCEEDED` (429) with the created user message.
 - LLM call synchronous; assistant message created on success.
 Response: `201 Created`
 ```json
@@ -255,7 +255,7 @@ Error codes (status mapping):
 - `MESSAGE_NOT_FOUND` (404)
 - `MESSAGE_DELETE_FORBIDDEN` (403)
 - `INVALID_CONTEXT` (400) – bad ids, mismatched types, media not ready
-- `LLM_QUOTA_EXCEEDED` (403)
+- `LLM_QUOTA_EXCEEDED` (429)
 - `LLM_UNAVAILABLE` (424)
 - `LLM_TIMEOUT` (504)
 - `INVALID_TITLE` (400)
@@ -311,7 +311,7 @@ Integration:
 - Follow-up send message: optional single highlight context; assistant reply created; over-quota persists user message and returns error without assistant.
 - Visibility scenarios: two users share library with media → see conversation/messages; without shared library → cannot access; when shared library removed → non-owner loses access (404/403).
 - Deletion: delete assistant/user message; delete last message deletes conversation; contexts removed.
-- Quota exceeded path: persists user message, no assistant, returns `LLM_QUOTA_EXCEEDED`; no UsageRecord increment when over limit.
+- Quota exceeded path: persists user message, no assistant, returns `LLM_QUOTA_EXCEEDED` (429); no UsageRecord increment when over limit.
 - LLM timeout/unavailable: user message persisted; assistant missing; error code returned.
 - Highlight/annotation deletion after being referenced: contexts removed, conversation still retrievable.
 
