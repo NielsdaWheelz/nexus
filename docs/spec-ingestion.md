@@ -575,6 +575,13 @@ All jobs are Celery tasks with two distinct failure modes and retry behaviors:
    - Implementation MUST be deterministic (same input → same output)
    - For PDF: MAY return empty `plain_text` if no text layer exists (scanned PDF)
    - For HTML/EPUB: `html` output MUST preserve reading order and map 1:1 to `plain_text` offsets
+   - **HTML recommended path (deterministic):** `jsdom` + `mozilla/readability` to derive `content`, `textContent`, `title`, `byline`, `publishedTime`, and meta tags. Fetch MUST canonicalize URL and strip tracking params before hashing.
+   - **PDF recommended path (deterministic):**
+     - Primary: structured parser (e.g., pdf-parse equivalent) with parameters enforcing line order and page breaks.
+     - Fallback: pdf.js text-layer traversal (page order, top-to-bottom, left-to-right) if primary parser returns no text or throws.
+     - Normalize whitespace: collapse CR/LF, replace form feeds with blank lines, collapse repeated spaces/tabs, collapse 3+ newlines to 2, trim.
+     - If BOTH parsers return no text, treat as scanned/image-only PDF → `plain_text = ''`, `html = NULL`, `failure_reason` NOT set, skip chunking/embedding, keep `ready_for_reading`.
+   - **Metadata capture:** merge parser-provided `info` + `metadata` dictionaries; attempt PDF version extraction from common keys (`PDFFormatVersion`, `Version`, `pdf:PDFVersion`, etc.). Null-safe and deterministic.
 6. Validate extraction result:
    - For HTML/EPUB: `plain_text` MUST be non-empty (fail with `EXTRACTION_ERROR` if empty)
    - For PDF: `plain_text` MAY be empty (indicates scanned/image-only PDF; allowed)
@@ -618,6 +625,12 @@ All jobs are Celery tasks with two distinct failure modes and retry behaviors:
 - For HTML: extraction order MUST match DOM traversal (depth-first, reading order)
 - For EPUB: extraction order MUST match spine order + chapter DOM traversal
 - For PDF: extraction order MUST match reading order (top-to-bottom, left-to-right per page)
+
+**Extraction and metadata heuristics (imported from working pipeline, tightened for determinism):**
+- HTML metadata collection SHOULD use a fixed selector set for authors/dates (e.g., `meta[name="author"]`, `meta[property="article:published_time"]`, `time[datetime]`, parsely/sailthru/twitter/meta variants). Selector set MUST be versioned and deterministic; see §11 for library picks.
+- Author parsing MAY strip deterministic byline prefixes (`by`, `from`), trim punctuation, drop obvious stopwords (`staff`, `press release`, wire services), and split on `,`, `;`, `/`, `and`, `&`, or `with`. After cleaning, names are inserted exactly as parsed (no merging/disambiguation beyond de-duplication by identical string).
+- Date parsing MAY normalize to ISO8601 when unambiguous; otherwise return raw string.
+- Metadata resolution MUST NOT call LLMs. Any inference logic MUST be deterministic and bounded.
 
 **Transaction Boundaries:**
 - Status transition `pending → processing`: atomic update with row lock
@@ -921,12 +934,13 @@ Constraints:
 1. **Best-effort extraction:** Authors are extracted from document metadata at ingestion (HTML `<meta name="author">`, EPUB `<dc:creator>`, PDF: none in v1). Extraction is best-effort; failure does not block processing.
 2. **Deduplication:** `author.name` is unique (enforced by database constraint). Duplicate author names reuse existing `author_id`.
 3. **No normalization:** v1 uses exact string match. No case-folding, no disambiguation, no external lookups. "John Smith" and "J. Smith" are distinct authors.
-4. **Association uniqueness:** `(media_id, author_id)` in `media_author` is unique. A media cannot be linked to the same author twice.
-5. **Zero authors allowed:** Media may have zero authors. Absence of authors does not block processing or indicate failure.
-6. **Splitting rules:** Author strings containing separators (comma, " and ", " & ") are split into multiple author names. Whitespace is trimmed.
-7. **Immutability (ingestion subsystem):** Ingestion MUST NEVER update or delete existing `author` rows or `media_author` associations. It may only create new rows that don't already exist.
-8. **User creation:** Users may create new authors via UI (manual metadata entry). v1 constraint: users CANNOT edit or delete authors (create-only).
-9. **Non-authoritative:** Author correctness is not guaranteed. Future metadata subsystem may support author editing, merging, and disambiguation (out of scope for v1 ingestion).
+4. **Allowed deterministic cleaning:** Pre-insert cleaning MAY strip byline prefixes (`by`, `from`), trim whitespace/punctuation, drop obvious non-author stopwords (e.g., `staff`, `press release`, `reuters`), and remove trailing dashes—so long as the steps are pure functions with published rules. After cleaning, names are inserted exactly; no semantic merging.
+5. **Association uniqueness:** `(media_id, author_id)` in `media_author` is unique. A media cannot be linked to the same author twice.
+6. **Zero authors allowed:** Media may have zero authors. Absence of authors does not block processing or indicate failure.
+7. **Splitting rules:** Author strings containing separators (comma, " and ", " & ") are split into multiple author names. Whitespace is trimmed.
+8. **Immutability (ingestion subsystem):** Ingestion MUST NEVER update or delete existing `author` rows or `media_author` associations. It may only create new rows that don't already exist.
+9. **User creation:** Users may create new authors via UI (manual metadata entry). v1 constraint: users CANNOT edit or delete authors (create-only).
+10. **Non-authoritative:** Author correctness is not guaranteed. Future metadata subsystem may support author editing, merging, and disambiguation (out of scope for v1 ingestion).
 
 ### Deduplication Invariants
 
@@ -1258,10 +1272,11 @@ GET /api/v1/media?limit=50&offset=50 # Page 2
 These decisions do not block the spec but must be made before coding begins. They should be documented in a separate `ingestion-implementation.md` file:
 
 3. **Q:** Text extraction libraries
-   - HTML: mozilla/readability, trafilatura, or newspaper3k?
-   - EPUB: ebooklib or calibre?
-   - PDF: PyMuPDF, pdfplumber, or pdfminer.six?
-   - **Constraint:** Must be deterministic, must align with highlight traversal order
+   - HTML: `jsdom` + `mozilla/readability` (deterministic main-content extraction; no LLM).
+   - EPUB: custom deterministic spine-order extractor (still required).
+   - PDF: primary structured parser (pdf-parse equivalent) with pdf.js text-layer fallback.
+   - **Constraint:** Must be deterministic, must align with highlight traversal order, MUST NOT rely on LLMs.
+   - **Selectors:** Author/date meta selector set MUST be versioned (see §4.2 heuristics) and kept deterministic.
 
 4. **Q:** Chunking strategy
    - Recommended: `recursive_character` with 1000 char chunks, 200 char overlap

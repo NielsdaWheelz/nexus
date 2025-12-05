@@ -533,7 +533,7 @@ When user removes media M from default library:
 - Edit highlight: change color
 - Add/edit annotation: create or modify annotation on highlight
 - Delete highlight: MUST cascade-delete annotation (if exists)
-- Delete annotation: MUST also delete the highlight (v1 product decision; changed from earlier annotation-only delete model)
+- Delete annotation: MUST leave the highlight intact
 - Overlapping highlight rendering: segment into minimal spans, apply all covering highlight IDs
 - Others' highlights: distinct visual treatment (attributed, read-only)
 - Highlight export: not in v1 scope
